@@ -2,15 +2,16 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 
 export class VoxService {
-  private ai: GoogleGenAI;
+  constructor() {}
 
-  constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  private getClient(): GoogleGenAI {
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   async fetchTrendingNews(region: string = "Global", language: string = "English") {
     try {
-      const response = await this.ai.models.generateContent({
+      const ai = this.getClient();
+      const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: `Research the top 5 trending news topics on X (Twitter) for: ${region}. 
         Focus on real-time social velocity. Language: ${language}.
@@ -34,7 +35,8 @@ export class VoxService {
   }
 
   async generatePodcastScript(trends: string, language: string = "English", duration: string = "1 minute") {
-    const response = await this.ai.models.generateContent({
+    const ai = this.getClient();
+    const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: `Showrunner: 'VoxTrends'. Create a ${duration} podcast briefing for these trends: ${trends}.
       Language: ${language}.
@@ -56,7 +58,8 @@ export class VoxService {
 
   async generateAudio(script: string) {
     try {
-      const response = await this.ai.models.generateContent({
+      const ai = this.getClient();
+      const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: script }] }],
         config: {
@@ -64,8 +67,8 @@ export class VoxService {
           speechConfig: {
             multiSpeakerVoiceConfig: {
               speakerVoiceConfigs: [
-                { speaker: 'Joe', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-                { speaker: 'Jane', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } }
+                { speaker: 'Joe', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
+                { speaker: 'Jane', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
               ]
             }
           },
@@ -79,7 +82,8 @@ export class VoxService {
   }
 
   async generateCoverArt(topic: string) {
-    const response = await this.ai.models.generateContent({
+    const ai = this.getClient();
+    const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [{ text: `Futuristic podcast cover art for: ${topic}. Dark violet and cinematic lighting.` }],
@@ -96,7 +100,8 @@ export class VoxService {
   }
 
   async generateFlashSummary(text: string, language: string = "English") {
-    const response = await this.ai.models.generateContent({
+    const ai = this.getClient();
+    const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `3 punchy bullet points summary of: ${text}. Language: ${language}.`,
     });
@@ -104,7 +109,8 @@ export class VoxService {
   }
 
   async conductResearch(topic: string, intensity: string, target: string, region: string = "Global", language: string = "English") {
-    const response = await this.ai.models.generateContent({
+    const ai = this.getClient();
+    const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: `Perform high-intensity research on: "${topic}" in ${region}. Target Audience: ${target}. Language: ${language}. Provide a deep analysis.`,
       config: { tools: [{ googleSearch: {} }] }
@@ -119,7 +125,8 @@ export class VoxService {
   }
 
   async interrogate(context: string, question: string, history: any[], language: string = "English") {
-    const chat = this.ai.chats.create({
+    const ai = this.getClient();
+    const chat = ai.chats.create({
       model: "gemini-3-flash-preview",
       config: {
         systemInstruction: `You are the Vox Intelligence Agent. Use context: ${context}. Language: ${language}.`,
