@@ -3,6 +3,7 @@ import { voxService, decodeBase64, decodeAudioData } from './services/gemini';
 import { voxDB } from './services/db';
 import { auth } from './services/auth';
 import { db } from './services/database';
+import { storage } from './services/storage';
 import { ICONS, COLORS } from './constants';
 import { EditionType, User, SavedClip, GroundingLink, ChatMessage } from './types';
 import AudioVisualizer from './components/AudioVisualizer';
@@ -260,29 +261,100 @@ const App: React.FC = () => {
   }, []);
 
   const handleGenerateDaily = async (ed: EditionType) => {
-    setLoading(true); setStatus(t.searching);
+    if (!authUser) {
+      setToastMessage('Please log in to generate editions');
+      return;
+    }
+
+    setLoading(true);
+    setStatus('Checking for cached edition...');
+    
     try {
+      // STEP 1: Check if we have a cached edition
+      const cached = await db.getCachedEdition(ed, region, language);
+      
+      if (cached && cached.expires_at && new Date(cached.expires_at) > new Date()) {
+        // We have a valid cached edition!
+        setStatus('Loading cached edition...');
+        
+        const cachedData: DailyData = {
+          text: cached.content,
+          script: cached.script,
+          audio: cached.audio_url,
+          links: cached.grounding_links || [],
+          imageUrl: cached.image_url,
+          flashSummary: cached.flash_summary || undefined,
+          chatHistory: [],
+        };
+        
+        const updatedEditions = { ...dailyEditions, [ed]: cachedData };
+        setDailyEditions(updatedEditions);
+        await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+        
+        setToastMessage('✨ Using cached edition (instant & free!)');
+        setStatus('');
+        setLoading(false);
+        
+        // Log cache hit for analytics
+        await db.logUsage(authUser.id, 'cache_hit', { edition: ed, region, language });
+        return;
+      }
+      
+      // STEP 2: No cache, generate fresh edition
+      setStatus(t.searching);
       const { text, grounding } = await voxService.fetchTrendingNews(region, language);
-      setStatus(t.writingScript); 
+      
+      setStatus(t.writingScript);
       const script = await voxService.generatePodcastScript(text, language);
-      setStatus("VOX SYNC..."); 
+      
+      setStatus('Generating audio & images...');
       const [audio, imageUrl, flash] = await Promise.all([
-        voxService.generateAudio(script), 
-        voxService.generateCoverArt(`News ${region} ${ed}`), 
+        voxService.generateAudio(script),
+        voxService.generateCoverArt(`News ${region} ${ed}`),
         voxService.generateFlashSummary(text, language)
       ]);
       
-      const newData: DailyData = { text, script, audio: audio || null, links: grounding, imageUrl, flashSummary: flash, chatHistory: [] };
-      const updatedEditions = { ...dailyEditions, [ed]: newData };
+      // STEP 3: Cache the generated edition
+      setStatus('Caching for other users...');
+      await db.cacheEdition(ed, region, language, text, script, {
+        audioUrl: audio || undefined,
+        imageUrl: imageUrl || undefined,
+        groundingLinks: grounding,
+        flashSummary: flash,
+      });
       
+      // STEP 4: Save to local state
+      const newData: DailyData = {
+        text,
+        script,
+        audio: audio || null,
+        links: grounding,
+        imageUrl,
+        flashSummary: flash,
+        chatHistory: []
+      };
+      
+      const updatedEditions = { ...dailyEditions, [ed]: newData };
       setDailyEditions(updatedEditions);
       await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+      
+      setToastMessage('🎉 Edition generated & cached!');
       setStatus('');
-    } catch (e: any) { 
-      setStatus(''); 
-      setToastMessage(e.message); 
-    } finally { 
-      setLoading(false); 
+      
+      // Log generation for analytics
+      await db.logUsage(authUser.id, 'generate_edition', {
+        edition: ed,
+        region,
+        language,
+        cost_estimate: 0.10
+      }, 0.10);
+      
+    } catch (e: any) {
+      console.error('Generate edition error:', e);
+      setStatus('');
+      setToastMessage(e.message || 'Failed to generate edition');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -313,7 +385,44 @@ const App: React.FC = () => {
     }
     
     try {
-      // Save to Supabase database
+      setLoading(true);
+      setStatus('Saving to vault...');
+      
+      let audioUrl: string | undefined;
+      let imageUrl: string | undefined;
+      
+      // Upload audio to Supabase Storage if it exists
+      if ((data as DailyData).audio) {
+        setStatus('Uploading audio to cloud...');
+        try {
+          audioUrl = await storage.uploadAudio(
+            authUser.id,
+            (data as DailyData).audio!,
+            `${type}-${Date.now()}`
+          );
+        } catch (error) {
+          console.error('Audio upload error:', error);
+          // Continue without audio if upload fails
+        }
+      }
+      
+      // Upload image to Supabase Storage if it exists
+      if ((data as DailyData).imageUrl) {
+        setStatus('Uploading image to cloud...');
+        try {
+          imageUrl = await storage.uploadImage(
+            authUser.id,
+            (data as DailyData).imageUrl!,
+            `${type}-${Date.now()}`
+          );
+        } catch (error) {
+          console.error('Image upload error:', error);
+          // Continue without image if upload fails
+        }
+      }
+      
+      // Save clip metadata to database
+      setStatus('Saving metadata...');
       const clip = await db.saveClip(
         authUser.id,
         title,
@@ -321,8 +430,8 @@ const App: React.FC = () => {
         data.text,
         {
           flashSummary: (data as DailyData).flashSummary,
-          audioUrl: (data as DailyData).audio,
-          imageUrl: (data as DailyData).imageUrl,
+          audioUrl: audioUrl,
+          imageUrl: imageUrl,
           chatHistory: (data as DailyData).chatHistory,
         }
       );
@@ -341,13 +450,18 @@ const App: React.FC = () => {
       };
       
       setSavedClips(prev => [newClip, ...prev]);
-      setToastMessage(t.savedSuccess);
+      setToastMessage('✅ Saved to cloud vault!');
+      setStatus('');
       
-      // Also log usage analytics
+      // Log usage analytics
       await db.logUsage(authUser.id, 'save_clip', { type, title });
+      
     } catch (error) {
       console.error('Save to vault error:', error);
       setToastMessage('Failed to save. Please try again.');
+      setStatus('');
+    } finally {
+      setLoading(false);
     }
   };
 
