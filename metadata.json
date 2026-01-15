@@ -1,0 +1,7 @@
+{
+  "name": "VoxTrends - AI Podcast Daily",
+  "description": "A premium AI-powered news aggregator that transforms X trends into a 3-minute professional podcast briefing three times a day, featuring high-quality multi-speaker TTS and intelligent news summaries.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
