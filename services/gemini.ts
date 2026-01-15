@@ -35,25 +35,30 @@ export class VoxService {
   }
 
   async generatePodcastScript(trends: string, language: string = "English", duration: string = "1 minute") {
-    const ai = this.getClient();
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: `Showrunner: 'VoxTrends'. Create a ${duration} podcast briefing for these trends: ${trends}.
-      Language: ${language}.
-      
-      Hosts:
-      - Joe: High-energy, charismatic main host.
-      - Jane: Intelligent, analytical research expert.
-      
-      Format:
-      Joe: [Welcome and hook]
-      Jane: [Detailed analysis of trends]
-      Joe: [Closing and sign-off]
-      
-      Output only the script text.`,
-      config: { temperature: 0.8 }
-    });
-    return response.text;
+    try {
+      const ai = this.getClient();
+      const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview",
+        contents: `Showrunner: 'VoxTrends'. Create a ${duration} podcast briefing for these trends: ${trends}.
+        Language: ${language}.
+        
+        Hosts:
+        - Joe: High-energy, charismatic main host.
+        - Jane: Intelligent, analytical research expert.
+        
+        Format:
+        Joe: [Welcome and hook]
+        Jane: [Detailed analysis of trends]
+        Joe: [Closing and sign-off]
+        
+        Output only the script text.`,
+        config: { temperature: 0.8 }
+      });
+      return response.text;
+    } catch (e) {
+      console.error("Script Gen Error:", e);
+      throw e;
+    }
   }
 
   async generateAudio(script: string) {
@@ -82,58 +87,77 @@ export class VoxService {
   }
 
   async generateCoverArt(topic: string) {
-    const ai = this.getClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [{ text: `Futuristic podcast cover art for: ${topic}. Dark violet and cinematic lighting.` }],
-      },
-      config: {
-        imageConfig: { aspectRatio: "16:9" }
-      }
-    });
+    try {
+      const ai = this.getClient();
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [{ text: `Futuristic podcast cover art for: ${topic}. Dark violet and cinematic lighting.` }],
+        },
+        config: {
+          imageConfig: { aspectRatio: "16:9" }
+        }
+      });
 
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    } catch (e) {
+      console.error("Image Gen Error:", e);
     }
     return null;
   }
 
   async generateFlashSummary(text: string, language: string = "English") {
-    const ai = this.getClient();
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `3 punchy bullet points summary of: ${text}. Language: ${language}.`,
-    });
-    return response.text;
+    try {
+      const ai = this.getClient();
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `3 punchy bullet points summary of: ${text}. Language: ${language}.`,
+      });
+      return response.text;
+    } catch (e) {
+      console.error("Summary Gen Error:", e);
+      return "";
+    }
   }
 
   async conductResearch(topic: string, intensity: string, target: string, region: string = "Global", language: string = "English") {
-    const ai = this.getClient();
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: `Perform high-intensity research on: "${topic}" in ${region}. Target Audience: ${target}. Language: ${language}. Provide a deep analysis.`,
-      config: { tools: [{ googleSearch: {} }] }
-    });
-    
-    const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
-      uri: chunk.web?.uri,
-      title: chunk.web?.title
-    })).filter((c: any) => c.uri) || [];
+    try {
+      const ai = this.getClient();
+      const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview",
+        contents: `Perform high-intensity research on: "${topic}" in ${region}. Target Audience: ${target}. Language: ${language}. Provide a deep analysis.`,
+        config: { tools: [{ googleSearch: {} }] }
+      });
+      
+      const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+        uri: chunk.web?.uri,
+        title: chunk.web?.title
+      })).filter((c: any) => c.uri) || [];
 
-    return { text: response.text || "No research findings available.", grounding };
+      return { text: response.text || "No research findings available.", grounding };
+    } catch (e) {
+      console.error("Research Error:", e);
+      throw e;
+    }
   }
 
   async interrogate(context: string, question: string, history: any[], language: string = "English") {
-    const ai = this.getClient();
-    const chat = ai.chats.create({
-      model: "gemini-3-flash-preview",
-      config: {
-        systemInstruction: `You are the Vox Intelligence Agent. Use context: ${context}. Language: ${language}.`,
-      }
-    });
-    const response = await chat.sendMessage({ message: question });
-    return response.text;
+    try {
+      const ai = this.getClient();
+      const chat = ai.chats.create({
+        model: "gemini-3-flash-preview",
+        config: {
+          systemInstruction: `You are the Vox Intelligence Agent. Use context: ${context}. Language: ${language}.`,
+        }
+      });
+      const response = await chat.sendMessage({ message: question });
+      return response.text;
+    } catch (e) {
+      console.error("Interrogate Error:", e);
+      return "Unable to process inquiry at this moment.";
+    }
   }
 }
 
