@@ -18,7 +18,7 @@ interface DailyData {
 }
 
 const VOX_USER_KEY = 'vox_user_identity';
-const VOX_EDITIONS_KEY = 'vox_daily_editions_v2'; // Versioned key for DB
+const VOX_EDITIONS_KEY = 'vox_daily_editions_v2'; 
 const VOX_VAULT_KEY = 'vox_vault_archive_v2';
 
 const RichText: React.FC<{ text: string; language: string }> = ({ text, language }) => {
@@ -150,12 +150,12 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [researchResult, setResearchResult] = useState<{ text: string, grounding: GroundingLink[] } | null>(null);
   const [step, setStep] = useState(0);
+  const [showMobileSettings, setShowMobileSettings] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const t = translations[language as keyof typeof translations] || translations.English;
 
-  // Hydration Effect - Loads from DB and LocalStorage
   useEffect(() => {
     const init = async () => {
       const savedUser = localStorage.getItem(VOX_USER_KEY);
@@ -164,7 +164,6 @@ const App: React.FC = () => {
         setView('dashboard');
       }
 
-      // Large binary data from IndexedDB
       const dbEditions = await voxDB.get(VOX_EDITIONS_KEY);
       const dbVault = await voxDB.get(VOX_VAULT_KEY);
       
@@ -179,7 +178,6 @@ const App: React.FC = () => {
     init();
   }, []);
 
-  // Safe Persistence logic (Separate from large data loops to avoid crashing)
   useEffect(() => {
     if (user) {
       try {
@@ -207,7 +205,6 @@ const App: React.FC = () => {
       const updatedEditions = { ...dailyEditions, [ed]: newData };
       
       setDailyEditions(updatedEditions);
-      // Persist immediately to IndexedDB
       await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
       setStatus('');
     } catch (e: any) { 
@@ -297,6 +294,38 @@ const App: React.FC = () => {
       <Toast message={toastMessage || ''} visible={!!toastMessage} onHide={() => setToastMessage(null)} />
       {shareClip && <ShareModal clip={shareClip} language={language} onClose={() => setShareClip(null)} autoGenerateVideo={shareClip.autoGenerate} />}
 
+      {/* Mobile Settings Modal */}
+      {showMobileSettings && (
+        <div className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-xl flex items-end animate-in fade-in md:hidden">
+          <div className="w-full bg-zinc-950 rounded-t-[3rem] p-10 border-t border-zinc-800 animate-in slide-in-from-bottom duration-500">
+            <div className="flex justify-between items-center mb-10">
+              <h3 className="text-2xl font-serif font-bold">{t.preferences}</h3>
+              <button onClick={() => setShowMobileSettings(false)} className="p-3 bg-zinc-900 rounded-full"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <div className="space-y-8">
+              <div className="space-y-3">
+                <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">{t.region}</label>
+                <select value={region} onChange={e => { setRegion(e.target.value); setShowMobileSettings(false); }} className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold focus:outline-none appearance-none cursor-pointer">
+                  <option value="Global">Global</option>
+                  <option value="USA">United States</option>
+                  <option value="Colombia">Colombia</option>
+                  <option value="Mexico">Mexico</option>
+                  <option value="Spain">Spain</option>
+                  <option value="Venezuela">Venezuela</option>
+                </select>
+              </div>
+              <div className="space-y-3">
+                <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">{t.language}</label>
+                <select value={language} onChange={e => { setLanguage(e.target.value); setShowMobileSettings(false); }} className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold focus:outline-none appearance-none cursor-pointer">
+                  <option value="English">English</option>
+                  <option value="Spanish">Spanish</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <aside className="hidden md:flex w-72 border-r border-zinc-900 flex-col p-8 gap-10 bg-zinc-950/20 shrink-0">
         <div className="flex items-center gap-3"><ICONS.Podcast className="w-8 h-8 text-violet-600" /><span className="text-2xl font-serif font-bold">VoxTrends</span></div>
         <nav className="flex-1 space-y-2">
@@ -328,16 +357,26 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col relative overflow-hidden">
         <header className="px-6 md:px-10 py-6 border-b border-zinc-900 flex justify-between items-center backdrop-blur-3xl bg-[#050505]/80 sticky top-0 z-50">
           <div className="flex flex-col gap-4">
-            <h2 className="text-2xl font-serif font-bold uppercase tracking-widest">{view === 'dashboard' ? t.broadcastCenter : 'Identity Vault'}</h2>
+            <div className="flex items-center gap-4">
+               <h2 className="text-xl md:text-2xl font-serif font-bold uppercase tracking-widest">{view === 'dashboard' ? t.broadcastCenter : 'Identity Vault'}</h2>
+               {/* Mobile Settings Toggle */}
+               <button onClick={() => setShowMobileSettings(true)} className="md:hidden p-2 bg-zinc-900 rounded-lg text-zinc-400"><ICONS.Settings className="w-5 h-5" /></button>
+            </div>
             {view === 'dashboard' && (
               <div className="flex gap-2">
                 {[EditionType.MORNING, EditionType.MIDDAY, EditionType.EVENING].map(ed => (
-                  <button key={ed} onClick={() => setActiveTab(ed)} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === ed ? 'bg-violet-600 border-violet-600 text-white' : 'bg-transparent border-zinc-800 text-zinc-500'}`}>{ed}</button>
+                  <button key={ed} onClick={() => setActiveTab(ed)} className={`px-3 md:px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === ed ? 'bg-violet-600 border-violet-600 text-white' : 'bg-transparent border-zinc-800 text-zinc-500'}`}>{ed}</button>
                 ))}
               </div>
             )}
           </div>
-          {loading && <div className="text-[10px] font-mono text-violet-500 animate-pulse">{status}</div>}
+          <div className="flex items-center gap-4">
+             {loading && <div className="text-[10px] font-mono text-violet-500 animate-pulse hidden md:block">{status}</div>}
+             {/* Simple Profile Button for Mobile */}
+             <button onClick={() => setView(view === 'profile' ? 'dashboard' : 'profile')} className="md:hidden p-3 bg-zinc-900 rounded-xl text-white">
+                {view === 'profile' ? <ICONS.Trend className="w-5 h-5" /> : <ICONS.FileText className="w-5 h-5" />}
+             </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-10 pb-32">
@@ -348,7 +387,7 @@ const App: React.FC = () => {
                   <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12 relative z-10">
                     <div className="animate-in slide-in-from-top duration-700">
                         <span className="text-violet-500 text-[10px] font-black uppercase tracking-widest mb-2 block">{activeTab} Pulse // {region}</span>
-                        <h3 className="text-5xl font-serif font-bold tracking-tighter">{t.thePulse}</h3>
+                        <h3 className="text-4xl md:text-5xl font-serif font-bold tracking-tighter">{t.thePulse}</h3>
                     </div>
                     <div className="flex gap-4 items-center">
                       {currentDaily ? (
@@ -357,12 +396,12 @@ const App: React.FC = () => {
                             <button onClick={() => setShareClip({ ...currentDaily, title: `${activeTab} Audio News`, autoGenerate: true })} className="px-6 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-[9px] font-black tracking-widest text-violet-400 hover:border-violet-600 transition-all">AUDIO IMAGE</button>
                             <button onClick={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')} className="px-6 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-[9px] font-black tracking-widest text-emerald-400 hover:border-emerald-600 transition-all">SAVE TO VAULT</button>
                           </div>
-                          <button onClick={() => currentDaily.audio && playAudio(currentDaily.audio)} className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-2xl hover:scale-105 transition-all text-black">
-                            {isPlaying ? <ICONS.Pause className="w-10 h-10" /> : <ICONS.Play className="w-10 h-10 ml-1" />}
+                          <button onClick={() => currentDaily.audio && playAudio(currentDaily.audio)} className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-3xl flex items-center justify-center shadow-2xl hover:scale-105 transition-all text-black">
+                            {isPlaying ? <ICONS.Pause className="w-8 h-8 md:w-10 md:h-10" /> : <ICONS.Play className="w-8 h-8 md:w-10 md:h-10 ml-1" />}
                           </button>
                         </>
                       ) : (
-                        <button onClick={() => handleGenerateDaily(activeTab)} disabled={loading} className="px-10 py-5 bg-white text-black font-black rounded-3xl hover:bg-violet-600 hover:text-white transition-all shadow-xl">{loading ? 'SYNCING...' : t.sync + ' ' + activeTab.toUpperCase()}</button>
+                        <button onClick={() => handleGenerateDaily(activeTab)} disabled={loading} className="px-8 md:px-10 py-4 md:py-5 bg-white text-black font-black rounded-3xl hover:bg-violet-600 hover:text-white transition-all shadow-xl">{loading ? 'SYNCING...' : t.sync + ' ' + activeTab.toUpperCase()}</button>
                       )}
                     </div>
                   </div>
@@ -391,7 +430,7 @@ const App: React.FC = () => {
               </div>
 
               <div className="lg:col-span-4 space-y-8">
-                <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-10">
+                <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-8 md:p-10">
                   <h3 className="text-xl font-bold mb-8 flex items-center gap-3"><div className="w-2 h-2 bg-violet-600 rounded-full animate-ping" />{t.guidedResearcher}</h3>
                   {step === 0 && (
                     <div className="space-y-6 animate-in slide-in-from-right">
@@ -423,12 +462,12 @@ const App: React.FC = () => {
 
           {view === 'profile' && user && (
             <div className="max-w-4xl mx-auto space-y-12 pb-20 animate-in fade-in">
-                <section className="flex items-center gap-10 p-12 bg-zinc-900/20 border border-zinc-900 rounded-[3rem]">
+                <section className="flex flex-col md:flex-row items-center gap-10 p-12 bg-zinc-900/20 border border-zinc-900 rounded-[3rem]">
                     <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-violet-600 shadow-2xl"><img src={user.avatar} className="w-full h-full object-cover" /></div>
-                    <div className="space-y-2">
+                    <div className="space-y-2 text-center md:text-left">
                         <h3 className="text-4xl font-serif font-bold text-white">{user.name}</h3>
                         <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Vox Investigator // Since {user.memberSince}</p>
-                        <div className="flex gap-4 pt-4">
+                        <div className="flex justify-center md:justify-start gap-4 pt-4">
                             <div className="px-4 py-2 bg-violet-600/10 border border-violet-600/20 rounded-xl"><p className="text-[10px] text-violet-500 font-black uppercase">Plan</p><p className="text-sm font-bold">{user.plan}</p></div>
                             <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl"><p className="text-[10px] text-zinc-500 font-black uppercase">Vault Storage</p><p className="text-sm font-bold">{savedClips.length} items</p></div>
                         </div>
@@ -465,7 +504,7 @@ const App: React.FC = () => {
       </main>
 
       {isPlaying && (
-        <div className="fixed bottom-8 right-8 z-[150] w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
+        <div className="fixed bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
           <div className="flex items-center gap-4 mb-3">
             <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse"><ICONS.Podcast className="w-6 h-6 text-white" /></div>
             <div className="flex-1 overflow-hidden"><p className="text-[10px] font-black text-violet-500 uppercase">On Air</p><p className="text-xs font-bold truncate">Broadcast Intelligence</p></div>
