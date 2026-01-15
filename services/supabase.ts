@@ -4,12 +4,13 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  throw new Error('Missing Supabase environment variables. Check your .env.local file.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Type definitions
+// ==================== TYPE DEFINITIONS ====================
+
 export interface User {
   id: string;
   email: string;
@@ -54,4 +55,13 @@ export interface DailyEdition {
   flash_summary: string | null;
   generated_at: string;
   expires_at: string | null;
+}
+
+export interface UsageAnalytic {
+  id: string;
+  user_id: string;
+  action_type: string;
+  metadata: Record<string, any>;
+  cost_estimate: number | null;
+  created_at: string;
 }
