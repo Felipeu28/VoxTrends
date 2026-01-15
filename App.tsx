@@ -1,11 +1,15 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { voxService, decodeBase64, decodeAudioData } from './services/gemini';
 import { voxDB } from './services/db';
+import { auth } from './services/auth';
+import { db } from './services/database';
 import { ICONS, COLORS } from './constants';
 import { EditionType, User, SavedClip, GroundingLink, ChatMessage } from './types';
 import AudioVisualizer from './components/AudioVisualizer';
 import { translations } from './translations';
+import LoginScreen from './components/auth/LoginScreen';
+import SignupScreen from './components/auth/SignupScreen';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface DailyData {
   text: string;
@@ -135,6 +139,13 @@ const InterrogationHub: React.FC<{ context: string, language: string, history: C
 };
 
 const App: React.FC = () => {
+  // Authentication state
+  const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
+  const [authLoading, setAuthLoading] = useState(true);
+  
+  // Application state
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'landing' | 'dashboard' | 'profile'>('landing');
   const [loading, setLoading] = useState(false);
@@ -156,19 +167,89 @@ const App: React.FC = () => {
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const t = translations[language as keyof typeof translations] || translations.English;
 
+  // Authentication effect
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        // Check for existing session
+        const currentUser = await auth.getCurrentUser();
+        setAuthUser(currentUser);
+        
+        if (currentUser) {
+          // Load user profile from database
+          const profile = await db.getUser(currentUser.id);
+          if (profile) {
+            setUserProfile(profile);
+            setUser({
+              name: profile.name || 'User',
+              email: profile.email,
+              avatar: profile.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Vox',
+              plan: profile.plan as 'Pro' | 'Free',
+              memberSince: new Date(profile.created_at).getFullYear().toString(),
+              region: profile.region,
+              language: profile.language,
+            });
+            setRegion(profile.region);
+            setLanguage(profile.language);
+            setView('dashboard');
+            
+            // Load user's saved clips from database
+            const clips = await db.getUserClips(currentUser.id);
+            setSavedClips(clips.map(clip => ({
+              id: clip.id,
+              title: clip.title,
+              date: new Date(clip.created_at).toLocaleDateString(),
+              type: clip.clip_type,
+              text: clip.content,
+              imageUrl: clip.image_url,
+              audioData: clip.audio_url,
+              flashSummary: clip.flash_summary || '',
+              chatHistory: clip.chat_history || [],
+            })));
+          }
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    
+    initAuth();
+    
+    // Listen for auth state changes
+    const { data: { subscription } } = auth.onAuthStateChange(async (user) => {
+      setAuthUser(user);
+      if (user) {
+        const profile = await db.getUser(user.id);
+        if (profile) {
+          setUserProfile(profile);
+          setUser({
+            name: profile.name || 'User',
+            email: profile.email,
+            avatar: profile.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Vox',
+            plan: profile.plan as 'Pro' | 'Free',
+            memberSince: new Date(profile.created_at).getFullYear().toString(),
+            region: profile.region,
+            language: profile.language,
+          });
+          setView('dashboard');
+        }
+      } else {
+        setUserProfile(null);
+        setUser(null);
+        setView('landing');
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Load cached data on mount
   useEffect(() => {
     const init = async () => {
-      const savedUser = localStorage.getItem(VOX_USER_KEY);
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
-        setView('dashboard');
-      }
-
       const dbEditions = await voxDB.get(VOX_EDITIONS_KEY);
-      const dbVault = await voxDB.get(VOX_VAULT_KEY);
-      
       if (dbEditions) setDailyEditions(dbEditions);
-      if (dbVault) setSavedClips(dbVault);
 
       const h = new Date().getHours(); 
       if (h < 12) setActiveTab(EditionType.MORNING); 
@@ -177,16 +258,6 @@ const App: React.FC = () => {
     };
     init();
   }, []);
-
-  useEffect(() => {
-    if (user) {
-      try {
-        localStorage.setItem(VOX_USER_KEY, JSON.stringify(user));
-      } catch (e) {
-        console.warn("Storage warning: User settings not persistent.");
-      }
-    }
-  }, [user]);
 
   const handleGenerateDaily = async (ed: EditionType) => {
     setLoading(true); setStatus(t.searching);
@@ -236,27 +307,62 @@ const App: React.FC = () => {
   };
 
   const saveToVault = async (title: string, data: DailyData | { text: string, grounding: GroundingLink[] }, type: 'Daily' | 'Research') => {
-    const newClip: SavedClip = {
-        id: Date.now().toString(),
+    if (!authUser) {
+      setToastMessage('Please log in to save clips');
+      return;
+    }
+    
+    try {
+      // Save to Supabase database
+      const clip = await db.saveClip(
+        authUser.id,
         title,
-        date: new Date().toLocaleDateString(),
         type,
-        text: data.text,
-        imageUrl: (data as DailyData).imageUrl || null,
-        audioData: (data as DailyData).audio || null,
-        flashSummary: (data as DailyData).flashSummary || '',
-    };
-    const updatedVault = [newClip, ...savedClips];
-    setSavedClips(updatedVault);
-    await voxDB.set(VOX_VAULT_KEY, updatedVault);
-    setToastMessage(t.savedSuccess);
+        data.text,
+        {
+          flashSummary: (data as DailyData).flashSummary,
+          audioUrl: (data as DailyData).audio,
+          imageUrl: (data as DailyData).imageUrl,
+          chatHistory: (data as DailyData).chatHistory,
+        }
+      );
+      
+      // Update local state
+      const newClip: SavedClip = {
+        id: clip.id,
+        title: clip.title,
+        date: new Date(clip.created_at).toLocaleDateString(),
+        type: clip.clip_type,
+        text: clip.content,
+        imageUrl: clip.image_url,
+        audioData: clip.audio_url,
+        flashSummary: clip.flash_summary || '',
+        chatHistory: clip.chat_history || [],
+      };
+      
+      setSavedClips(prev => [newClip, ...prev]);
+      setToastMessage(t.savedSuccess);
+      
+      // Also log usage analytics
+      await db.logUsage(authUser.id, 'save_clip', { type, title });
+    } catch (error) {
+      console.error('Save to vault error:', error);
+      setToastMessage('Failed to save. Please try again.');
+    }
   };
 
   const removeFromVault = async (id: string) => {
-    const updatedVault = savedClips.filter(c => c.id !== id);
-    setSavedClips(updatedVault);
-    await voxDB.set(VOX_VAULT_KEY, updatedVault);
-    setToastMessage(t.deletedSuccess);
+    try {
+      // Delete from Supabase database
+      await db.deleteClip(id);
+      
+      // Update local state
+      setSavedClips(prev => prev.filter(c => c.id !== id));
+      setToastMessage(t.deletedSuccess);
+    } catch (error) {
+      console.error('Delete clip error:', error);
+      setToastMessage('Failed to delete. Please try again.');
+    }
   };
 
   const playAudio = async (data: string) => {
@@ -285,7 +391,42 @@ const App: React.FC = () => {
     }
   };
 
-  if (view === 'landing') return <div className="h-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center"><div className="w-24 h-24 bg-violet-600 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl shadow-violet-600/30"><ICONS.Podcast className="w-14 h-14 text-white" /></div><h1 className="text-6xl font-serif font-bold mb-4 tracking-tighter">VoxTrends.</h1><p className="text-zinc-500 max-w-sm mb-12">{t.landingTagline}</p><button onClick={() => { setUser({ name: 'Investigator', email: 'user@vox.ai', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Vox', plan: 'Pro', memberSince: '2025', region: 'Global', language: 'English' }); setView('dashboard'); }} className="px-14 py-6 bg-white text-black font-black rounded-3xl hover:bg-violet-600 hover:text-white transition-all">START LISTENING</button></div>;
+  // Show loading screen while checking auth
+  if (authLoading) {
+    return (
+      <div className="h-screen bg-[#050505] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-20 h-20 bg-violet-600 rounded-[2rem] flex items-center justify-center mb-6 mx-auto shadow-2xl shadow-violet-600/30 animate-pulse">
+            <ICONS.Podcast className="w-12 h-12 text-white" />
+          </div>
+          <p className="text-zinc-500 font-mono text-sm">Loading VoxTrends...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show authentication screens if not logged in
+  if (!authUser) {
+    if (authView === 'login') {
+      return <LoginScreen onSwitchToSignup={() => setAuthView('signup')} />;
+    } else {
+      return <SignupScreen onSwitchToLogin={() => setAuthView('login')} />;
+    }
+  }
+  
+  // Add logout function
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setUser(null);
+      setUserProfile(null);
+      setView('landing');
+      setToastMessage('Logged out successfully');
+    } catch (error) {
+      console.error('Logout error:', error);
+      setToastMessage('Failed to log out');
+    }
+  };
 
   const currentDaily = dailyEditions[activeTab];
 
@@ -331,6 +472,12 @@ const App: React.FC = () => {
         <nav className="flex-1 space-y-2">
           <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'dashboard' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-white'}`}><ICONS.Trend className="w-5 h-5" /><span className="font-bold">Dashboard</span></button>
           <button onClick={() => setView('profile')} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'profile' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-white'}`}><ICONS.FileText className="w-5 h-5" /><span className="font-bold">Profile & Vault</span></button>
+          <button onClick={handleLogout} className="w-full flex items-center gap-4 p-4 rounded-2xl text-zinc-500 hover:text-red-400 transition-all">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="font-bold">Logout</span>
+          </button>
         </nav>
         <div className="p-6 bg-zinc-900/50 rounded-3xl border border-zinc-800 space-y-4">
           <div className="space-y-1">
