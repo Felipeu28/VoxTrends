@@ -22,6 +22,48 @@ interface DailyData {
   chatHistory?: ChatMessage[];
 }
 
+// Convert base64 audio to blob URL for playback
+const createAudioBlobUrl = (base64Audio: string): string => {
+  try {
+    // Decode base64
+    const binaryString = atob(base64Audio.replace(/[\n\r\t\s]/g, ''));
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // Create WAV file with headers
+    const dataSize = bytes.length;
+    const fileSize = 44 + dataSize;
+    const wavBuffer = new ArrayBuffer(fileSize);
+    const view = new DataView(wavBuffer);
+    
+    // WAV header
+    view.setUint32(0, 0x52494646, false); // "RIFF"
+    view.setUint32(4, fileSize - 8, true);
+    view.setUint32(8, 0x57415645, false); // "WAVE"
+    view.setUint32(12, 0x666d7420, false); // "fmt "
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, 24000, true); // sample rate
+    view.setUint32(28, 48000, true); // byte rate
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    view.setUint32(36, 0x64617461, false); // "data"
+    view.setUint32(40, dataSize, true);
+    
+    const pcmData = new Uint8Array(wavBuffer, 44);
+    pcmData.set(bytes);
+    
+    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.error('Failed to create audio blob:', error);
+    return '';
+  }
+};
+
 const VOX_EDITIONS_KEY = 'vox_daily_editions_v2';
 
 // ==================== HELPER COMPONENTS ====================
@@ -64,29 +106,48 @@ const Toast: React.FC<{ message: string; visible: boolean; onHide: () => void }>
 };
 
 // Enhanced Audio Player Component
+// Enhanced Audio Player Component - Handles both URLs and base64
 const AudioPlayer: React.FC<{ 
-  audioUrl: string | null; 
+  audioData: string | null;  // Changed from audioUrl
   clipId: string;
   isPlaying: boolean;
   onPlayPause: () => void;
-}> = ({ audioUrl, clipId, isPlaying, onPlayPause }) => {
+}> = ({ audioData, clipId, isPlaying, onPlayPause }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    if (audioRef.current) {
+    if (!audioData) return;
+    
+    // Check if it's a URL or base64
+    if (audioData.startsWith('http')) {
+      // It's already a URL from Supabase
+      setAudioSrc(audioData);
+    } else {
+      // It's base64, convert to blob URL
+      const blobUrl = createAudioBlobUrl(audioData);
+      setAudioSrc(blobUrl);
+      
+      // Cleanup blob URL when component unmounts
+      return () => URL.revokeObjectURL(blobUrl);
+    }
+  }, [audioData]);
+
+  useEffect(() => {
+    if (audioRef.current && audioSrc) {
       if (isPlaying) {
         audioRef.current.play().catch(err => console.error('Playback error:', err));
       } else {
         audioRef.current.pause();
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, audioSrc]);
 
-  if (!audioUrl) return null;
+  if (!audioSrc) return null;
 
   return (
     <>
-      <audio ref={audioRef} src={audioUrl} preload="metadata" />
+      <audio ref={audioRef} src={audioSrc} preload="metadata" />
       <button 
         onClick={onPlayPause}
         className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-3xl flex items-center justify-center shadow-2xl hover:scale-105 transition-all text-black"
@@ -284,6 +345,7 @@ const InterrogationHub: React.FC<{
 };
 
 // Share Modal Component
+// Enhanced Share Modal with Beautiful PDF Export
 const ShareModal: React.FC<{ 
   clip: { title: string; imageUrl: string | null; audio: string | null; text: string };
   language: string;
@@ -293,27 +355,235 @@ const ShareModal: React.FC<{
 
   const handleExportPDF = () => {
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (!printWindow) {
+      alert('Please allow popups to export PDF');
+      return;
+    }
     
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>${clip.title}</title>
-          <style>
-            body { font-family: serif; padding: 40px; line-height: 1.6; }
-            h1 { color: #8B5CF6; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-            img { max-width: 100%; border-radius: 12px; margin-bottom: 20px; }
-            p { white-space: pre-wrap; }
-          </style>
-        </head>
-        <body>
-          ${clip.imageUrl ? `<img src="${clip.imageUrl}" />` : ''}
-          <h1>${clip.title}</h1>
-          <p>${clip.text}</p>
-        </body>
-      </html>
-    `);
+    // Create beautiful HTML for PDF
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${clip.title} - VoxTrends Intelligence Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:wght@700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      line-height: 1.8;
+      color: #1a1a1a;
+      background: #ffffff;
+      padding: 60px 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      border-bottom: 4px solid #8B5CF6;
+      padding-bottom: 30px;
+      margin-bottom: 50px;
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: #8B5CF6;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 20px;
+    }
+    
+    .logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #8B5CF6;
+    }
+    
+    .report-type {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #6B7280;
+      margin-bottom: 10px;
+    }
+    
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 42px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+    
+    .meta {
+      display: flex;
+      gap: 30px;
+      font-size: 13px;
+      color: #6B7280;
+      margin-top: 20px;
+    }
+    
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .meta-label {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .cover-image {
+      width: 100%;
+      max-height: 500px;
+      object-fit: cover;
+      border-radius: 20px;
+      margin: 40px 0;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
+    }
+    
+    .content {
+      font-size: 16px;
+      line-height: 1.9;
+      color: #374151;
+    }
+    
+    .content p {
+      margin-bottom: 24px;
+    }
+    
+    .content h2,
+    .content h3,
+    .content h4 {
+      font-family: 'Playfair Display', serif;
+      color: #111827;
+      margin: 40px 0 20px 0;
+      padding-left: 20px;
+      border-left: 4px solid #8B5CF6;
+    }
+    
+    .content h2 {
+      font-size: 32px;
+      margin-top: 60px;
+    }
+    
+    .content h3 {
+      font-size: 26px;
+    }
+    
+    .content h4 {
+      font-size: 20px;
+    }
+    
+    .footer {
+      margin-top: 80px;
+      padding-top: 40px;
+      border-top: 2px solid #E5E7EB;
+      text-align: center;
+      color: #9CA3AF;
+      font-size: 12px;
+    }
+    
+    .footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      color: #8B5CF6;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    
+    @media print {
+      body {
+        padding: 40px;
+      }
+      
+      .cover-image {
+        page-break-before: always;
+        page-break-after: always;
+      }
+      
+      .content h2 {
+        page-break-after: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">V</div>
+      <div class="logo-text">VoxTrends</div>
+    </div>
+    
+    <div class="report-type">Intelligence Report</div>
+    <h1>${clip.title}</h1>
+    
+    <div class="meta">
+      <div class="meta-item">
+        <span class="meta-label">Generated:</span>
+        <span>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Type:</span>
+        <span>VoxTrends AI Analysis</span>
+      </div>
+    </div>
+  </div>
+  
+  ${clip.imageUrl ? `<img src="${clip.imageUrl}" alt="Cover Image" class="cover-image" />` : ''}
+  
+  <div class="content">
+    ${clip.text.split('\n\n').map(para => {
+      if (para.startsWith('#')) {
+        const level = para.match(/^#+/)?.[0].length || 2;
+        const text = para.replace(/^#+\s*/, '');
+        return `<h${level}>${text}</h${level}>`;
+      }
+      return `<p>${para}</p>`;
+    }).join('')}
+  </div>
+  
+  <div class="footer">
+    <div class="footer-logo">VoxTrends</div>
+    <p>This report was generated by VoxTrends AI Intelligence Platform</p>
+    <p>© ${new Date().getFullYear()} VoxTrends. All rights reserved.</p>
+  </div>
+</body>
+</html>
+    `;
+    
+    printWindow.document.write(htmlContent);
     printWindow.document.close();
+    
+    // Wait for content to load, then trigger print
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
   };
 
   return (
@@ -338,14 +608,32 @@ const ShareModal: React.FC<{
         <div className="w-full md:w-1/2 p-12 flex flex-col justify-center gap-6">
           <button
             onClick={handleExportPDF}
-            className="w-full p-8 bg-zinc-900 border border-zinc-800 rounded-3xl hover:border-violet-600 transition-all text-left flex items-center gap-6"
+            className="w-full p-8 bg-zinc-900 border border-zinc-800 rounded-3xl hover:border-violet-600 transition-all text-left flex items-center gap-6 group"
           >
-            <div className="w-16 h-16 bg-zinc-950 rounded-2xl flex items-center justify-center text-violet-500">
+            <div className="w-16 h-16 bg-zinc-950 rounded-2xl flex items-center justify-center text-violet-500 group-hover:bg-violet-600 group-hover:text-white transition-all">
               <ICONS.FileText className="w-8 h-8" />
             </div>
             <div>
-              <p className="text-xl font-bold text-white">{t.exportPDF}</p>
-              <p className="text-sm text-zinc-600">Standard intelligence report.</p>
+              <p className="text-xl font-bold text-white group-hover:text-violet-400 transition-colors">{t.exportPDF}</p>
+              <p className="text-sm text-zinc-600">Professional intelligence report with branding</p>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(clip.text);
+              alert('Content copied to clipboard!');
+            }}
+            className="w-full p-8 bg-zinc-900 border border-zinc-800 rounded-3xl hover:border-emerald-600 transition-all text-left flex items-center gap-6 group"
+          >
+            <div className="w-16 h-16 bg-zinc-950 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-600 group-hover:text-white transition-all">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-white group-hover:text-emerald-400 transition-colors">Copy Text</p>
+              <p className="text-sm text-zinc-600">Copy all content to clipboard</p>
             </div>
           </button>
         </div>
@@ -353,7 +641,6 @@ const ShareModal: React.FC<{
     </div>
   );
 };
-
 // ==================== MAIN APP COMPONENT ====================
 
 const App: React.FC = () => {
@@ -993,7 +1280,7 @@ const App: React.FC = () => {
                           </div>
 
                           <AudioPlayer
-                            audioUrl={currentDaily.audio}
+                            audioData={currentDaily.audio}
                             clipId={`edition-${activeTab}`}
                             isPlaying={playingClipId === `edition-${activeTab}`}
                             onPlayPause={() => {
@@ -1238,7 +1525,7 @@ const App: React.FC = () => {
                         {/* Hidden Audio Element for Playback */}
                         {clip.audioData && (
                           <AudioPlayer
-                            audioUrl={clip.audioData}
+                          audioData={currentDaily.audio}
                             clipId={clip.id}
                             isPlaying={playingClipId === clip.id}
                             onPlayPause={() => {
