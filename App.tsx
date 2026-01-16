@@ -1252,7 +1252,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-10 pb-32">
+        <div className="flex-1 overflow-y-auto p-4 md:p-10 pb-64 md:pb-32">
           {/* Dashboard View */}
           {view === 'dashboard' && (
             <div className="flex flex-col lg:grid lg:grid-cols-12 gap-10">
