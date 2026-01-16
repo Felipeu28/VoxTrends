@@ -250,7 +250,7 @@ const ResearchDisplay: React.FC<{
   );
 };
 
-// Auto-Scrolling Chat Component
+// Auto-Scrolling Chat Component with Mobile-Optimized Collapsible Design
 const InterrogationHub: React.FC<{ 
   context: string;
   language: string;
@@ -260,17 +260,20 @@ const InterrogationHub: React.FC<{
   const t = translations[language as keyof typeof translations] || translations.English;
   const [question, setQuestion] = useState('');
   const [thinking, setThinking] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true); // Start collapsed on mobile
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!collapsed) {
+    if (!collapsed && history.length > 0) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [history, collapsed]);
 
   const handleAsk = async () => {
     if (!question.trim()) return;
+    
+    // Auto-expand when user asks first question
+    if (collapsed) setCollapsed(false);
     
     setThinking(true);
     const q = question;
@@ -289,54 +292,110 @@ const InterrogationHub: React.FC<{
   };
 
   return (
-    <div className="mt-12 border-t border-zinc-900 pt-12 space-y-8 pb-10">
+    <div className="mt-8 md:mt-12 border-t-2 border-violet-600/30 pt-8 md:pt-12 space-y-6 md:space-y-8 pb-10 bg-zinc-950/30 rounded-3xl px-4 md:px-8 -mx-4 md:-mx-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <ICONS.Podcast className="w-6 h-6 text-violet-600 animate-pulse" />
-          <h4 className="text-xl font-serif font-bold">{t.interrogateIntel}</h4>
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-violet-600 rounded-xl flex items-center justify-center">
+            <ICONS.Podcast className="w-5 h-5 md:w-6 md:h-6 text-white" />
+          </div>
+          <div>
+            <h4 className="text-lg md:text-xl font-serif font-bold text-white">Ask Questions</h4>
+            <p className="text-xs text-zinc-500">Get deeper insights about this news</p>
+          </div>
         </div>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="text-zinc-500 hover:text-white text-sm font-bold"
-        >
-          {collapsed ? '↓ Expand' : '↑ Collapse'}
-        </button>
+        {history.length > 0 && (
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-2 bg-zinc-900 rounded-lg text-zinc-400 hover:text-white transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={collapsed ? "M19 9l-7 7-7-7" : "M5 15l7-7 7 7"} />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {!collapsed && (
+      {(!collapsed || history.length === 0) && (
         <>
-          <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-            {history.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-6 rounded-3xl ${m.role === 'user' ? 'bg-zinc-900 border border-zinc-800' : 'bg-violet-600/10 border border-violet-600/20'}`}>
-                  <RichText text={m.text} language={language} />
+          {/* Chat History */}
+          {history.length > 0 && (
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {history.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-4 md:p-6 rounded-2xl md:rounded-3xl ${m.role === 'user' ? 'bg-violet-600 text-white' : 'bg-zinc-900 border border-zinc-800'}`}>
+                    <RichText text={m.text} language={language} />
+                  </div>
                 </div>
-              </div>
-            ))}
-            {thinking && (
-              <div className="text-[10px] text-violet-500 font-mono animate-pulse">{t.aiThinking}</div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
+              ))}
+              {thinking && (
+                <div className="text-xs text-violet-500 font-mono animate-pulse flex items-center gap-2">
+                  <div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" />
+                  Thinking...
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+          )}
 
+          {/* Empty State */}
+          {history.length === 0 && (
+            <div className="bg-zinc-900/50 rounded-2xl p-6 border border-dashed border-zinc-800">
+              <p className="text-sm text-zinc-400 mb-4">💡 Example questions you can ask:</p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setQuestion("What are the key implications?")}
+                  className="w-full text-left px-4 py-3 bg-zinc-900 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all border border-zinc-800"
+                >
+                  "What are the key implications?"
+                </button>
+                <button
+                  onClick={() => setQuestion("Who will be affected by this?")}
+                  className="w-full text-left px-4 py-3 bg-zinc-900 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all border border-zinc-800"
+                >
+                  "Who will be affected by this?"
+                </button>
+                <button
+                  onClick={() => setQuestion("What happens next?")}
+                  className="w-full text-left px-4 py-3 bg-zinc-900 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all border border-zinc-800"
+                >
+                  "What happens next?"
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Input Field */}
           <div className="relative">
             <input
               type="text"
-              placeholder={t.askSomething}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-[2.5rem] py-6 px-8 focus:outline-none focus:border-violet-600"
+              placeholder="Ask anything about this news..."
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 md:py-6 px-4 md:px-8 pr-20 md:pr-24 text-base md:text-lg focus:outline-none focus:border-violet-600 transition-colors"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
             />
             <button
               onClick={handleAsk}
-              disabled={thinking}
-              className="absolute right-3 top-3 bottom-3 px-6 bg-white text-black rounded-3xl font-black disabled:opacity-50"
+              disabled={thinking || !question.trim()}
+              className="absolute right-2 top-2 bottom-2 px-4 md:px-6 bg-violet-600 text-white rounded-xl font-black text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-violet-700 transition-all"
             >
               ASK
             </button>
           </div>
         </>
+      )}
+
+      {/* Collapsed State - Show Badge */}
+      {collapsed && history.length > 0 && (
+        <div className="flex items-center justify-between p-4 bg-zinc-900 rounded-xl border border-zinc-800">
+          <span className="text-sm text-zinc-400">{history.length} message{history.length > 1 ? 's' : ''} in conversation</span>
+          <button
+            onClick={() => setCollapsed(false)}
+            className="text-sm font-bold text-violet-400 hover:text-violet-300"
+          >
+            Show Conversation →
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1210,8 +1269,8 @@ const App: React.FC = () => {
         <header className="px-6 md:px-10 py-6 border-b border-zinc-900 flex justify-between items-center backdrop-blur-3xl bg-[#050505]/80 sticky top-0 z-50">
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-4">
-              <h2 className="text-xl md:text-2xl font-serif font-bold uppercase tracking-widest">
-                {view === 'dashboard' ? t.broadcastCenter : 'Intelligence Vault'}
+              <h2 className="text-lg md:text-2xl font-serif font-bold uppercase tracking-wide md:tracking-widest">
+                {view === 'dashboard' ? 'News' : 'My Vault'}
               </h2>
               <button
                 onClick={() => setShowMobileSettings(true)}
@@ -1241,16 +1300,18 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Desktop profile button only */}
             <button
               onClick={() => setView(view === 'profile' ? 'dashboard' : 'profile')}
-              className="md:hidden p-3 bg-zinc-900 rounded-xl text-white"
+              className="hidden md:flex p-3 bg-zinc-900 rounded-xl text-white items-center gap-2"
             >
-              {view === 'profile' ? <ICONS.Trend className="w-5 h-5" /> : <ICONS.FileText className="w-5 h-5" />}
+              <ICONS.FileText className="w-5 h-5" />
+              <span className="text-sm font-bold">Vault</span>
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-10 pb-64 md:pb-32">
+        <div className="flex-1 overflow-y-auto p-4 md:p-10 pb-24 md:pb-32">
           {/* Dashboard View */}
           {view === 'dashboard' && (
             <div className="flex flex-col lg:grid lg:grid-cols-12 gap-10">
@@ -1259,10 +1320,10 @@ const App: React.FC = () => {
                 <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
                   <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12 relative z-10">
                     <div className="animate-in slide-in-from-top duration-700">
-                      <span className="text-violet-500 text-[10px] font-black uppercase tracking-widest mb-2 block">
-                        {activeTab} Pulse // {region}
+                      <span className="text-violet-500 text-xs md:text-[10px] font-bold md:font-black uppercase tracking-wide md:tracking-widest mb-2 block">
+                        {activeTab} Edition · {region}
                       </span>
-                      <h3 className="text-4xl md:text-5xl font-serif font-bold tracking-tighter">{t.thePulse}</h3>
+                      <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold tracking-tight">Today's Briefing</h3>
                     </div>
 
                     <div className="flex gap-4 items-center">
@@ -1271,9 +1332,9 @@ const App: React.FC = () => {
                           <div className="flex flex-col gap-2">
                             <button
                               onClick={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
-                              className="px-6 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-[9px] font-black tracking-widest text-emerald-400 hover:border-emerald-600 transition-all"
+                              className="px-8 py-3 bg-emerald-600 border border-emerald-700 rounded-xl text-sm font-black tracking-wide text-white hover:bg-emerald-700 transition-all shadow-lg"
                             >
-                              SAVE TO VAULT
+                              💾 SAVE
                             </button>
                           </div>
 
@@ -1321,11 +1382,31 @@ const App: React.FC = () => {
 
                       <RichText text={currentDaily.text} language={language} />
 
+                      {/* Section Divider */}
+                      <div className="my-8 md:my-10 flex items-center gap-4">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-700 to-transparent"></div>
+                      </div>
+
                       {/* Grounding Links */}
                       {currentDaily.links && currentDaily.links.length > 0 && (
-                        <div className="space-y-4 border-t border-zinc-900 pt-8">
-                          <h5 className="text-sm font-bold text-zinc-500 uppercase tracking-widest">Verified Sources</h5>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <details className="group border-t border-zinc-800 pt-6 md:pt-8">
+                          <summary className="flex items-center justify-between cursor-pointer list-none">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <h5 className="text-sm font-bold text-white">Verified Sources</h5>
+                                <p className="text-xs text-zinc-500">{currentDaily.links.length} source{currentDaily.links.length > 1 ? 's' : ''}</p>
+                              </div>
+                            </div>
+                            <svg className="w-5 h-5 text-zinc-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </summary>
+                          <div className="mt-4 space-y-3">
                             {currentDaily.links.map((link, i) => (
                               <a
                                 key={i}
@@ -1341,7 +1422,7 @@ const App: React.FC = () => {
                               </a>
                             ))}
                           </div>
-                        </div>
+                        </details>
                       )}
 
                       <InterrogationHub
@@ -1368,7 +1449,7 @@ const App: React.FC = () => {
               </div>
 
               {/* Research Panel */}
-              <div className="lg:col-span-4 space-y-8">
+              <div id="research-section" className="lg:col-span-4 space-y-8">
                 <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-8 md:p-10">
                   <h3 className="text-xl font-bold mb-8 flex items-center gap-3">
                     <div className="w-2 h-2 bg-violet-600 rounded-full animate-ping" />
@@ -1545,9 +1626,53 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950 border-t border-zinc-800 safe-area-pb">
+        <div className="flex items-center justify-around py-3 px-4">
+          <button
+            onClick={() => setView('dashboard')}
+            className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
+              view === 'dashboard'
+                ? 'bg-violet-600/20 text-violet-400'
+                : 'text-zinc-500'
+            }`}
+          >
+            <ICONS.Trend className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase tracking-wide">News</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setView('dashboard');
+              // Scroll to research section
+              setTimeout(() => {
+                const researchSection = document.getElementById('research-section');
+                researchSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 100);
+            }}
+            className="flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all text-zinc-500"
+          >
+            <ICONS.Search className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase tracking-wide">Research</span>
+          </button>
+
+          <button
+            onClick={() => setView('profile')}
+            className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
+              view === 'profile'
+                ? 'bg-violet-600/20 text-violet-400'
+                : 'text-zinc-500'
+            }`}
+          >
+            <ICONS.FileText className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase tracking-wide">Vault</span>
+          </button>
+        </div>
+      </div>
+
       {/* Floating Audio Player */}
       {playingClipId && (
-        <div className="fixed bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
+        <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
           <div className="flex items-center gap-4 mb-3">
             <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse">
               <ICONS.Podcast className="w-6 h-6 text-white" />
