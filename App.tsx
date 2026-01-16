@@ -288,8 +288,6 @@ const InterrogationHub: React.FC<{
     }
   };
 
-  if (history.length === 0) return null;
-
   return (
     <div className="mt-12 border-t border-zinc-900 pt-12 space-y-8 pb-10">
       <div className="flex items-center justify-between">
