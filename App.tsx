@@ -1688,7 +1688,7 @@ const App: React.FC = () => {
     </button>
   </div>
 </div>
-
+</main>
 {/* Floating Audio Player - OUTSIDE everything */}
 {playingClipId && (
   <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
@@ -1710,7 +1710,7 @@ const App: React.FC = () => {
     <AudioVisualizer isPlaying={true} />
   </div>
 )}
-</div> {/* <--- ADD THIS (Closes the main container) */}
-  );       {/* <--- ADD THIS (Closes the return statement) */}
+</div> 
+  );      
 };          
 export default App;
