@@ -1639,30 +1639,20 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Hidden Audio Element for Playback */}
-                        {clip.audioData && (
+{clip.audioData && (
   <AudioPlayer
-    audioData={clip.audioData}  // ✅ CORRECT!
+    audioData={clip.audioData}
     clipId={clip.id}
     isPlaying={playingClipId === clip.id}
-    onPlayPause={() => {...}}
-
-                              if (playingClipId === clip.id) {
-                                setPlayingClipId(null);
-                              } else {
-                                setPlayingClipId(clip.id);
-                              }
-                            }}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            </div>
-          )}
-        </div>
-      </main>
+    onPlayPause={() => {
+      if (playingClipId === clip.id) {
+        setPlayingClipId(null);
+      } else {
+        setPlayingClipId(clip.id);
+      }
+    }}
+  />
+)}
 
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950 border-t border-zinc-800 safe-area-pb">
