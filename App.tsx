@@ -1688,6 +1688,7 @@ const App: React.FC = () => {
     </button>
   </div>
 </div>
+</div>          
 </main>
 {/* Floating Audio Player - OUTSIDE everything */}
       {playingClipId && (
