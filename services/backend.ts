@@ -7,13 +7,23 @@ export class BackendService {
    * Generic function to call any Supabase Edge Function
    */
   private async callFunction(name: string, body: any) {
+    console.log('🔍 [Backend] Getting session...');
     const { data: { session } } = await supabase.auth.getSession();
     
+    console.log('🔍 [Backend] Session:', session ? 'EXISTS' : 'NULL');
+    console.log('🔍 [Backend] User:', session?.user?.email);
+    console.log('🔍 [Backend] Access token:', session?.access_token ? 'EXISTS' : 'MISSING');
+    
     if (!session) {
+      console.error('❌ [Backend] No session - user not authenticated');
       throw new Error('Not authenticated');
     }
 
-    const response = await fetch(`${FUNCTIONS_URL}/${name}`, {
+    const url = `${FUNCTIONS_URL}/${name}`;
+    console.log('🔍 [Backend] Calling:', url);
+    console.log('🔍 [Backend] Body:', body);
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -22,7 +32,10 @@ export class BackendService {
       body: JSON.stringify(body),
     });
 
+    console.log('🔍 [Backend] Response status:', response.status);
+
     const data = await response.json();
+    console.log('🔍 [Backend] Response data:', data);
 
     if (!response.ok) {
       // Handle specific error types
