@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenAI } from 'https://esm.sh/@google/genai';
 
-// --- INLINED CONFIG (Prevents Import Crashes) ---
+// --- 1. CONFIGURATION (Inlined to prevent import crashes) ---
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -16,22 +16,30 @@ const PLAN_LIMITS = {
 console.log('Generate Edition Function Started');
 
 serve(async (req) => {
-  // 1. Handle CORS Preflight Immediately
+  // 2. Handle CORS Preflight Immediately
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // 3. Parse & Validate Input
     const { editionType, region, language } = await req.json();
+    
+    if (!editionType || !region || !language) {
+      throw new Error('Missing required fields: editionType, region, language');
+    }
 
-    // 2. Validate Environment & Inputs
+    // 4. Validate API Key
     const apiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!apiKey) throw new Error('Server Config Error: GEMINI_API_KEY is missing');
-    if (!editionType || !region || !language) throw new Error('Missing required fields');
+    if (!apiKey) {
+      throw new Error('Server Config Error: GEMINI_API_KEY is missing');
+    }
 
-    // 3. Authenticate User
+    // 5. Authenticate User
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Missing authorization header');
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
+    }
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -42,7 +50,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) throw new Error('Unauthorized');
 
-    // 4. Check Limits (Inlined Logic)
+    // 6. Check User Plan & Limits
     const { data: profile } = await supabaseClient
       .from('users')
       .select('plan')
@@ -53,14 +61,25 @@ serve(async (req) => {
     // @ts-ignore
     const limits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.Free;
 
+    // Check Region/Language restrictions
     if (userPlan === 'Free') {
       if (!limits.allowedRegions.includes(region)) {
-        return new Response(JSON.stringify({ error: 'Region restricted', upgrade: true }), 
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ 
+          error: 'Region restricted', 
+          upgrade: true,
+          message: `Free users can only access ${limits.allowedRegions.join(', ')}.` 
+        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      if (!limits.allowedLanguages.includes(language)) {
+        return new Response(JSON.stringify({ 
+          error: 'Language restricted', 
+          upgrade: true,
+          message: `Free users can only access ${limits.allowedLanguages.join(', ')}.` 
+        }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
 
-    // 5. Check Daily Usage
+    // Check Daily Usage Limit
     const today = new Date().toISOString().split('T')[0];
     const { data: usage } = await supabaseClient
       .from('daily_usage')
@@ -70,11 +89,14 @@ serve(async (req) => {
       .single();
 
     if ((usage?.editions_count || 0) >= limits.dailyEditions) {
-      return new Response(JSON.stringify({ error: 'Daily limit reached', upgrade: true }), 
-      { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ 
+        error: 'Daily limit reached', 
+        upgrade: true,
+        message: 'Upgrade to Pro for unlimited editions.' 
+      }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // 6. Check Cache
+    // 7. Check Cache (Avoid paying for AI if we already have it)
     const { data: cachedEdition } = await supabaseClient
       .from('daily_editions')
       .select('*')
@@ -86,6 +108,10 @@ serve(async (req) => {
       .single();
 
     if (cachedEdition) {
+      await supabaseClient.from('usage_analytics').insert({
+        user_id: user.id, action_type: 'cache_hit', metadata: { editionType, region }
+      });
+
       return new Response(JSON.stringify({
         cached: true,
         data: {
@@ -99,11 +125,12 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // 7. Generate Fresh Content (Gemini)
+    // 8. Generate Fresh Content (Gemini)
+    console.log('Generating fresh content...');
     const genAI = new GoogleGenAI({ apiKey });
     const model = genAI.models;
 
-    // Fetch News
+    // News Search
     const newsRes = await model.generateContent({
       model: 'gemini-2.0-flash',
       contents: `Research top 5 trending news in ${region} in ${language}. Focus on social velocity.`,
@@ -111,14 +138,14 @@ serve(async (req) => {
     });
     const text = newsRes.text || "No news found.";
 
-    // Generate Script
+    // Script Writing
     const scriptRes = await model.generateContent({
       model: 'gemini-2.0-flash',
       contents: `Create a 30s podcast script for: ${text}. Hosts: Joe and Jane. Language: ${language}. Output only the script.`,
     });
     const script = scriptRes.text || "";
 
-    // Generate Flash Summary
+    // Flash Summary
     let flashSummary = "";
     try {
       const summaryRes = await model.generateContent({
@@ -128,7 +155,7 @@ serve(async (req) => {
       flashSummary = summaryRes.text || "";
     } catch (e) { console.error("Summary failed", e); }
 
-    // 8. Save to Database
+    // 9. Save to Database
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 6);
 
@@ -141,6 +168,7 @@ serve(async (req) => {
 
     await supabaseClient.rpc('increment_daily_usage', { p_user_id: user.id, p_action: 'edition' });
 
+    // 10. Return Success
     return new Response(JSON.stringify({
       cached: false,
       data: { text, script, audio: null, imageUrl: null, links: [], flashSummary }
@@ -148,6 +176,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('Function error:', error);
+    // Return error WITH CORS headers so frontend can read it
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
