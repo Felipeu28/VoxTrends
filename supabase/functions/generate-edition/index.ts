@@ -1,15 +1,16 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 import { getPlanLimits } from '../_shared/limits.ts';
 import { GeminiService } from '../_shared/gemini.ts';
 
 console.log('Generate Edition Function Started');
 
 serve(async (req) => {
-  // Handle CORS
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
+  // 1. Handle CORS Preflight Request explicitly (Fixes the CORS Error)
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
     // Parse request body
