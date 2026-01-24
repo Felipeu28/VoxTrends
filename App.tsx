@@ -1640,11 +1640,12 @@ const App: React.FC = () => {
 
                         {/* Hidden Audio Element for Playback */}
                         {clip.audioData && (
-                          <AudioPlayer
-                          audioData={currentDaily.audio}
-                            clipId={clip.id}
-                            isPlaying={playingClipId === clip.id}
-                            onPlayPause={() => {
+  <AudioPlayer
+    audioData={clip.audioData}  // ✅ CORRECT!
+    clipId={clip.id}
+    isPlaying={playingClipId === clip.id}
+    onPlayPause={() => {...}}
+
                               if (playingClipId === clip.id) {
                                 setPlayingClipId(null);
                               } else {
