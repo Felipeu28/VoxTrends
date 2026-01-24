@@ -1,8 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
-import { getPlanLimits } from '../_shared/limits.ts';
-import { GeminiService } from '../_shared/gemini.ts';
+import { corsHeaders } from '../shared/cors.ts';   // <--- Changed to 'shared'
+import { getPlanLimits } from '../shared/limits.ts'; // <--- Changed to 'shared'
+import { GeminiService } from '../shared/gemini.ts'; // <--- Changed to 'shared'
 
 console.log('Generate Edition Function Started');
 
