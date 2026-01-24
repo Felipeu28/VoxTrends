@@ -11,6 +11,7 @@
   "dependencies": {
     "@google/genai": "^1.35.0",
     "@supabase/supabase-js": "^2.39.3",
+    "react-router-dom": "^6.20.0",   <-- ADD THIS LINE
     "react-dom": "^19.2.3",
     "react": "^19.2.3"
   },
