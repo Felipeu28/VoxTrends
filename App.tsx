@@ -64,7 +64,11 @@ const createAudioBlobUrl = (base64Audio: string): string => {
   }
 };
 
-const VOX_EDITIONS_KEY = 'vox_daily_editions_v2';
+const VOX_EDITIONS_KEY = 'vox_daily_editions_v3'; // Incremented for new structure
+
+// Helper function to create unique edition keys
+const getEditionKey = (type: EditionType, region: string, language: string) => 
+  `${type}-${region}-${language}`;
 
 // ==================== HELPER COMPONENTS ====================
 
@@ -715,11 +719,7 @@ const App: React.FC = () => {
   const [region, setRegion] = useState('Global');
   const [language, setLanguage] = useState('English');
   const [activeTab, setActiveTab] = useState<EditionType>(EditionType.MORNING);
-  const [dailyEditions, setDailyEditions] = useState<Record<EditionType, DailyData | null>>({
-    [EditionType.MORNING]: null,
-    [EditionType.MIDDAY]: null,
-    [EditionType.EVENING]: null
-  });
+  const [dailyEditions, setDailyEditions] = useState<Record<string, DailyData>>({});
   const [savedClips, setSavedClips] = useState<SavedClip[]>([]);
   const [playingClipId, setPlayingClipId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -831,9 +831,17 @@ const App: React.FC = () => {
 
   // ==================== MAIN FUNCTIONS ====================
 
-  const handleGenerateDaily = async (ed: EditionType) => {
+  const handleGenerateDaily = async (ed: EditionType, forceRefresh = false) => {
     if (!authUser) {
       setToastMessage('Please log in to generate editions');
+      return;
+    }
+
+    const editionKey = getEditionKey(ed, region, language);
+    
+    // If edition exists locally and not forcing refresh, just show it
+    if (!forceRefresh && dailyEditions[editionKey]) {
+      setToastMessage(`✨ Already loaded: ${ed} · ${region} · ${language}`);
       return;
     }
 
@@ -841,10 +849,10 @@ const App: React.FC = () => {
     setStatus('Checking for cached edition...');
     
     try {
-      // Check for cached edition
+      // Check for cached edition with current settings
       const cached = await db.getCachedEdition(ed, region, language);
       
-      if (cached && cached.expires_at && new Date(cached.expires_at) > new Date()) {
+      if (!forceRefresh && cached && cached.expires_at && new Date(cached.expires_at) > new Date()) {
         setStatus('Loading cached edition...');
         
         const cachedData: DailyData = {
@@ -857,11 +865,10 @@ const App: React.FC = () => {
           chatHistory: [],
         };
         
-        const updatedEditions = { ...dailyEditions, [ed]: cachedData };
-        setDailyEditions(updatedEditions);
-        await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+        setDailyEditions(prev => ({ ...prev, [editionKey]: cachedData }));
+        await voxDB.set(VOX_EDITIONS_KEY, { ...dailyEditions, [editionKey]: cachedData });
         
-        setToastMessage(`✨ Using cached ${ed} edition for ${region} (${language})`);
+        setToastMessage(`✨ Loaded ${ed} for ${region} (${language})`);
         setStatus('');
         setLoading(false);
         
@@ -935,9 +942,8 @@ const App: React.FC = () => {
         chatHistory: []
       };
       
-      const updatedEditions = { ...dailyEditions, [ed]: newData };
-      setDailyEditions(updatedEditions);
-      await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+      setDailyEditions(prev => ({ ...prev, [editionKey]: newData }));
+      await voxDB.set(VOX_EDITIONS_KEY, { ...dailyEditions, [editionKey]: newData });
       
       setToastMessage(`🎉 ${ed} edition generated for ${region} (${language})!`);
       setStatus('');
@@ -1118,7 +1124,11 @@ const App: React.FC = () => {
     }
   }
 
-  const currentDaily = dailyEditions[activeTab];
+  const currentEditionKey = getEditionKey(activeTab, region, language);
+  const currentDaily = dailyEditions[currentEditionKey];
+  
+  // Count how many versions of this edition type exist
+  const editionVariants = Object.keys(dailyEditions).filter(k => k.startsWith(activeTab)).length;
 
   return (
     <div className="h-screen bg-[#050505] text-zinc-100 flex flex-col md:flex-row overflow-hidden font-sans">
@@ -1320,8 +1330,21 @@ const App: React.FC = () => {
                 <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
                   <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12 relative z-10">
                     <div className="animate-in slide-in-from-top duration-700">
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
+                          🌍 {region}
+                        </span>
+                        <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
+                          🗣️ {language}
+                        </span>
+                        {editionVariants > 1 && (
+                          <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold text-zinc-500">
+                            {editionVariants} version{editionVariants > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-violet-500 text-xs md:text-[10px] font-bold md:font-black uppercase tracking-wide md:tracking-widest mb-2 block">
-                        {activeTab} Edition · {region}
+                        {activeTab} Edition
                       </span>
                       <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold tracking-tight">Today's Briefing</h3>
                     </div>
@@ -1335,6 +1358,13 @@ const App: React.FC = () => {
                               className="px-8 py-3 bg-emerald-600 border border-emerald-700 rounded-xl text-sm font-black tracking-wide text-white hover:bg-emerald-700 transition-all shadow-lg"
                             >
                               💾 SAVE
+                            </button>
+                            <button
+                              onClick={() => handleGenerateDaily(activeTab, true)}
+                              disabled={loading}
+                              className="px-8 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold tracking-wide text-violet-400 hover:border-violet-600 transition-all disabled:opacity-50"
+                            >
+                              🔄 Regenerate
                             </button>
                           </div>
 
@@ -1352,13 +1382,20 @@ const App: React.FC = () => {
                           />
                         </>
                       ) : (
-                        <button
-                          onClick={() => handleGenerateDaily(activeTab)}
-                          disabled={loading}
-                          className="px-8 md:px-10 py-4 md:py-5 bg-white text-black font-black rounded-3xl hover:bg-violet-600 hover:text-white transition-all shadow-xl disabled:opacity-50"
-                        >
-                          {loading ? 'SYNCING...' : `${t.sync} ${activeTab.toUpperCase()}`}
-                        </button>
+                        <div className="flex flex-col items-end gap-3">
+                          {Object.keys(dailyEditions).some(k => k.startsWith(activeTab)) && (
+                            <p className="text-xs text-zinc-500 text-right max-w-xs">
+                              💡 Changed settings? Generate a new version for {region} in {language}
+                            </p>
+                          )}
+                          <button
+                            onClick={() => handleGenerateDaily(activeTab)}
+                            disabled={loading}
+                            className="px-8 md:px-10 py-4 md:py-5 bg-white text-black font-black rounded-3xl hover:bg-violet-600 hover:text-white transition-all shadow-xl disabled:opacity-50"
+                          >
+                            {loading ? 'SYNCING...' : `${t.sync} ${activeTab.toUpperCase()}`}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1431,7 +1468,7 @@ const App: React.FC = () => {
                         history={currentDaily.chatHistory || []}
                         setHistory={async (h) => {
                           const updatedDaily = { ...currentDaily, chatHistory: h };
-                          const updatedEditions = { ...dailyEditions, [activeTab]: updatedDaily };
+                          const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
                           setDailyEditions(updatedEditions);
                           await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
                         }}
