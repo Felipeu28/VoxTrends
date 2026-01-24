@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from 'https://esm.sh/@google/genai@1.35.0';
+import { GoogleGenAI } from 'https://esm.sh/@google/genai';
 
 export class GeminiService {
   private client: GoogleGenAI;
