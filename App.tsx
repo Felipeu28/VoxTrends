@@ -1686,11 +1686,13 @@ const App: React.FC = () => {
       <ICONS.FileText className="w-6 h-6" />
       <span className="text-[10px] font-bold uppercase tracking-wide">Vault</span>
     </button>
-  </div>
-</div>
-</div>          
-</main>
-{/* Floating Audio Player - OUTSIDE everything */}
+ {/* Closing the nested divs inside main */}
+      </div>
+      </div>
+      </div>
+      </main>
+
+      {/* Floating Audio Player - OUTSIDE main, INSIDE root */}
       {playingClipId && (
         <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
           <div className="flex items-center gap-4 mb-3">
@@ -1712,7 +1714,7 @@ const App: React.FC = () => {
         </div>
       )}
       
-    </div> {/* Closes the main root container */}
+    </div>
   );
 };
 
