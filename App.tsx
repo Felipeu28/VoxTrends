@@ -11,6 +11,9 @@ import { translations } from './translations';
 import LoginScreen from './components/auth/LoginScreen';
 import SignupScreen from './components/auth/SignupScreen';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { backend } from './services/backend';
+import QuotaDisplay from './components/QuotaDisplay';
+import UpgradeModal from './components/UpgradeModal';
 
 interface DailyData {
   text: string;
@@ -168,7 +171,7 @@ const ProgressBar: React.FC<{
   status: string;
   estimatedDuration?: number;
 }> = ({ loading, status, estimatedDuration = 25000 }) => {
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = (0);
 
   useEffect(() => {
     if (!loading) {
@@ -1553,174 +1556,179 @@ const App: React.FC = () => {
           )}
 
           {/* Profile/Vault View */}
-          {view === 'profile' && user && (
-            <div className="max-w-4xl mx-auto space-y-12 pb-20 animate-in fade-in">
-              <section className="flex flex-col md:flex-row items-center gap-10 p-12 bg-zinc-900/20 border border-zinc-900 rounded-[3rem]">
-                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-violet-600 shadow-2xl">
-                  <img src={user.avatar} className="w-full h-full object-cover" alt={user.name} />
-                </div>
-                <div className="space-y-2 text-center md:text-left">
-                  <h3 className="text-4xl font-serif font-bold text-white">{user.name}</h3>
-                  <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">
-                    Vox Investigator // Since {user.memberSince}
-                  </p>
-                  <div className="flex justify-center md:justify-start gap-4 pt-4">
-                    <div className="px-4 py-2 bg-violet-600/10 border border-violet-600/20 rounded-xl">
-                      <p className="text-[10px] text-violet-500 font-black uppercase">Plan</p>
-                      <p className="text-sm font-bold">{user.plan}</p>
-                    </div>
-                    <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-                      <p className="text-[10px] text-zinc-500 font-black uppercase">Vault Storage</p>
-                      <p className="text-sm font-bold">{savedClips.length} items</p>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="space-y-8">
-                <h4 className="text-2xl font-serif font-bold flex items-center gap-4">
-                  Intelligence Vault
-                  <div className="h-[1px] flex-1 bg-zinc-900" />
-                </h4>
-
-                {savedClips.length === 0 ? (
-                  <div className="py-20 text-center bg-zinc-950 border border-dashed border-zinc-800 rounded-[3rem] text-zinc-600 font-serif italic">
-                    Your vault is currently empty. Start investigating to store intel here.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {savedClips.map(clip => (
-                      <div
-                        key={clip.id}
-                        className="p-8 bg-zinc-900/50 border border-zinc-800 rounded-[2.5rem] hover:border-violet-600/50 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute top-4 right-4 flex gap-2">
-                          <button
-                            onClick={() => removeFromVault(clip.id)}
-                            className="p-2 bg-zinc-950 rounded-lg text-zinc-600 hover:text-red-500 transition-colors"
-                          >
-                            <ICONS.Trash className="w-4 h-4" />
-                          </button>
-                        </div>
-
-                        <span className="text-[9px] font-black text-violet-500 uppercase tracking-widest mb-2 block">
-                          {clip.type} // {clip.date}
-                        </span>
-                        <h5 className="text-xl font-bold text-white mb-4">{clip.title}</h5>
-
-                        <div className="flex gap-4">
-                          {clip.audioData && (
-                            <button
-                              onClick={() => {
-                                if (playingClipId === clip.id) {
-                                  setPlayingClipId(null);
-                                } else {
-                                  setPlayingClipId(clip.id);
-                                }
-                              }}
-                              className="flex-1 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-violet-600 hover:text-white transition-all"
-                            >
-                              {playingClipId === clip.id ? 'PAUSE' : 'PLAY'}
-                            </button>
-                          )}
-                          <button
-                            onClick={() =>
-                              setShareClip({
-                                title: clip.title,
-                                audio: clip.audioData || null,
-                                imageUrl: clip.imageUrl || null,
-                                text: clip.text,
-                              })
-                            }
-                            className="px-6 py-3 bg-zinc-950 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:text-white transition-all"
-                          >
-                            OPEN
-                          </button>
-                        </div>
-
-                        {/* Hidden Audio Element for Playback */}
-{clip.audioData && (
-  <AudioPlayer
-    audioData={clip.audioData}
-    clipId={clip.id}
-    isPlaying={playingClipId === clip.id}
-    onPlayPause={() => {
-      if (playingClipId === clip.id) {
-        setPlayingClipId(null);
-      } else {
-        setPlayingClipId(clip.id);
-      }
-    }}
-  />
-)}
-
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950 border-t border-zinc-800 safe-area-pb">
-        <div className="flex items-center justify-around py-3 px-4">
-          <button
-            onClick={() => setView('dashboard')}
-            className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
-              view === 'dashboard'
-                ? 'bg-violet-600/20 text-violet-400'
-                : 'text-zinc-500'
-            }`}
-          >
-            <ICONS.Trend className="w-6 h-6" />
-            <span className="text-[10px] font-bold uppercase tracking-wide">News</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setView('dashboard');
-              // Scroll to research section
-              setTimeout(() => {
-                const researchSection = document.getElementById('research-section');
-                researchSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }, 100);
-            }}
-            className="flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all text-zinc-500"
-          >
-            <ICONS.Search className="w-6 h-6" />
-            <span className="text-[10px] font-bold uppercase tracking-wide">Research</span>
-          </button>
-
-          <button
-            onClick={() => setView('profile')}
-            className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
-              view === 'profile'
-                ? 'bg-violet-600/20 text-violet-400'
-                : 'text-zinc-500'
-            }`}
-          >
-            <ICONS.FileText className="w-6 h-6" />
-            <span className="text-[10px] font-bold uppercase tracking-wide">Vault</span>
-          </button>
+{view === 'profile' && user && (
+  <div className="max-w-4xl mx-auto space-y-12 pb-20 animate-in fade-in">
+    <section className="flex flex-col md:flex-row items-center gap-10 p-12 bg-zinc-900/20 border border-zinc-900 rounded-[3rem]">
+      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-violet-600 shadow-2xl">
+        <img src={user.avatar} className="w-full h-full object-cover" alt={user.name} />
+      </div>
+      <div className="space-y-2 text-center md:text-left">
+        <h3 className="text-4xl font-serif font-bold text-white">{user.name}</h3>
+        <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">
+          Vox Investigator // Since {user.memberSince}
+        </p>
+        <div className="flex justify-center md:justify-start gap-4 pt-4">
+          <div className="px-4 py-2 bg-violet-600/10 border border-violet-600/20 rounded-xl">
+            <p className="text-[10px] text-violet-500 font-black uppercase">Plan</p>
+            <p className="text-sm font-bold">{user.plan}</p>
+          </div>
+          <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+            <p className="text-[10px] text-zinc-500 font-black uppercase">Vault Storage</p>
+            <p className="text-sm font-bold">{savedClips.length} items</p>
+          </div>
         </div>
       </div>
+    </section>
 
-      {/* Floating Audio Player */}
-      {playingClipId && (
-        <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse">
-              <ICONS.Podcast className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-[10px] font-black text-violet-500 uppercase">On Air</p>
-              <p className="text-xs font-bold truncate">Broadcast Intelligence</p>
-            </div>
-            <button
-              onClick={() => setPlayingClipId(null)}
-              className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white"
+    <section className="space-y-8">
+      <h4 className="text-2xl font-serif font-bold flex items-center gap-4">
+        Intelligence Vault
+        <div className="h-[1px] flex-1 bg-zinc-900" />
+      </h4>
+
+      {savedClips.length === 0 ? (
+        <div className="py-20 text-center bg-zinc-950 border border-dashed border-zinc-800 rounded-[3rem] text-zinc-600 font-serif italic">
+          Your vault is currently empty. Start investigating to store intel here.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {savedClips.map(clip => (
+            <div
+              key={clip.id}
+              className="p-8 bg-zinc-900/50 border border-zinc-800 rounded-[2.5rem] hover:border-violet-600/50 transition-all group relative overflow-hidden"
             >
-              <ICONS.Pause className="w-4 h-4" />
-            </button>
-          </div>
-          <AudioVisualizer isPlaying={true} />
+              <div className="absolute top-4 right-4 flex gap-2">
+                <button
+                  onClick={() => removeFromVault(clip.id)}
+                  className="p-2 bg-zinc-950 rounded-lg text-zinc-600 hover:text-red-500 transition-colors"
+                >
+                  <ICONS.Trash className="w-4 h-4" />
+                </button>
+              </div>
+
+              <span className="text-[9px] font-black text-violet-500 uppercase tracking-widest mb-2 block">
+                {clip.type} // {clip.date}
+              </span>
+              <h5 className="text-xl font-bold text-white mb-4">{clip.title}</h5>
+
+              <div className="flex gap-4">
+                {clip.audioData && (
+                  <button
+                    onClick={() => {
+                      if (playingClipId === clip.id) {
+                        setPlayingClipId(null);
+                      } else {
+                        setPlayingClipId(clip.id);
+                      }
+                    }}
+                    className="flex-1 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-violet-600 hover:text-white transition-all"
+                  >
+                    {playingClipId === clip.id ? 'PAUSE' : 'PLAY'}
+                  </button>
+                )}
+                <button
+                  onClick={() =>
+                    setShareClip({
+                      title: clip.title,
+                      audio: clip.audioData || null,
+                      imageUrl: clip.imageUrl || null,
+                      text: clip.text,
+                    })
+                  }
+                  className="px-6 py-3 bg-zinc-950 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:text-white transition-all"
+                >
+                  OPEN
+                </button>
+              </div>
+
+              {/* Hidden Audio Element for Playback - INSIDE clip card */}
+              {clip.audioData && (
+                <div className="hidden">
+                  <AudioPlayer
+                    audioData={clip.audioData}
+                    clipId={clip.id}
+                    isPlaying={playingClipId === clip.id}
+                    onPlayPause={() => {
+                      if (playingClipId === clip.id) {
+                        setPlayingClipId(null);
+                      } else {
+                        setPlayingClipId(clip.id);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
-    </div>
-  );
-};
+    </section>
+  </div>
+)}
 
+{/* Mobile Bottom Navigation - OUTSIDE profile view */}
+<div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950 border-t border-zinc-800 safe-area-pb">
+  <div className="flex items-center justify-around py-3 px-4">
+    <button
+      onClick={() => setView('dashboard')}
+      className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
+        view === 'dashboard'
+          ? 'bg-violet-600/20 text-violet-400'
+          : 'text-zinc-500'
+      }`}
+    >
+      <ICONS.Trend className="w-6 h-6" />
+      <span className="text-[10px] font-bold uppercase tracking-wide">News</span>
+    </button>
+
+    <button
+      onClick={() => {
+        setView('dashboard');
+        setTimeout(() => {
+          const researchSection = document.getElementById('research-section');
+          researchSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }}
+      className="flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all text-zinc-500"
+    >
+      <ICONS.Search className="w-6 h-6" />
+      <span className="text-[10px] font-bold uppercase tracking-wide">Research</span>
+    </button>
+
+    <button
+      onClick={() => setView('profile')}
+      className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
+        view === 'profile'
+          ? 'bg-violet-600/20 text-violet-400'
+          : 'text-zinc-500'
+      }`}
+    >
+      <ICONS.FileText className="w-6 h-6" />
+      <span className="text-[10px] font-bold uppercase tracking-wide">Vault</span>
+    </button>
+  </div>
+</div>
+
+{/* Floating Audio Player - OUTSIDE everything */}
+{playingClipId && (
+  <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
+    <div className="flex items-center gap-4 mb-3">
+      <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse">
+        <ICONS.Podcast className="w-6 h-6 text-white" />
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <p className="text-[10px] font-black text-violet-500 uppercase">On Air</p>
+        <p className="text-xs font-bold truncate">Broadcast Intelligence</p>
+      </div>
+      <button
+        onClick={() => setPlayingClipId(null)}
+        className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white"
+      >
+        <ICONS.Pause className="w-4 h-4" />
+      </button>
+    </div>
+    <AudioVisualizer isPlaying={true} />
+  </div>
+)}
+          
 export default App;
