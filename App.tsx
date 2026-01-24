@@ -1710,5 +1710,7 @@ const App: React.FC = () => {
     <AudioVisualizer isPlaying={true} />
   </div>
 )}
-          
+</div> {/* <--- ADD THIS (Closes the main container) */}
+  );       {/* <--- ADD THIS (Closes the return statement) */}
+};          
 export default App;
