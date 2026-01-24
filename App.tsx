@@ -172,7 +172,7 @@ const ProgressBar: React.FC<{
   status: string;
   estimatedDuration?: number;
 }> = ({ loading, status, estimatedDuration = 25000 }) => {
-  const [progress, setProgress] = (0);
+  const [progress, setProgress] = useState(0); //
 
   useEffect(() => {
     if (!loading) {
