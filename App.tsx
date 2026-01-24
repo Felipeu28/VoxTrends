@@ -1690,27 +1690,29 @@ const App: React.FC = () => {
 </div>
 </main>
 {/* Floating Audio Player - OUTSIDE everything */}
-{playingClipId && (
-  <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
-    <div className="flex items-center gap-4 mb-3">
-      <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse">
-        <ICONS.Podcast className="w-6 h-6 text-white" />
-      </div>
-      <div className="flex-1 overflow-hidden">
-        <p className="text-[10px] font-black text-violet-500 uppercase">On Air</p>
-        <p className="text-xs font-bold truncate">Broadcast Intelligence</p>
-      </div>
-      <button
-        onClick={() => setPlayingClipId(null)}
-        className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white"
-      >
-        <ICONS.Pause className="w-4 h-4" />
-      </button>
-    </div>
-    <AudioVisualizer isPlaying={true} />
-  </div>
-)}
-</div> 
-  );      
-};          
+      {playingClipId && (
+        <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
+          <div className="flex items-center gap-4 mb-3">
+            <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse">
+              <ICONS.Podcast className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-[10px] font-black text-violet-500 uppercase">On Air</p>
+              <p className="text-xs font-bold truncate">Broadcast Intelligence</p>
+            </div>
+            <button
+              onClick={() => setPlayingClipId(null)}
+              className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white"
+            >
+              <ICONS.Pause className="w-4 h-4" />
+            </button>
+          </div>
+          <AudioVisualizer isPlaying={true} />
+        </div>
+      )}
+      
+    </div> {/* Closes the main root container */}
+  );
+};
+
 export default App;
