@@ -284,11 +284,11 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           data: {
-            content: cachedEdition.content,
+            text: cachedEdition.content,
             script: cachedEdition.script,
-            audioUrl: cachedEdition.audio_url,
+            audio: cachedEdition.audio_url,
             imageUrl: cachedEdition.image_url,
-            groundingLinks: cachedEdition.grounding_links,
+            links: cachedEdition.grounding_links,
             flashSummary: cachedEdition.flash_summary,
             cached: true,
           },
@@ -374,11 +374,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         data: {
-          content: trendingNews,
+          text: trendingNews,
           script: script || '',
-          audioUrl,
+          audio: audioUrl,
           imageUrl,
-          groundingLinks,
+          links: groundingLinks,
           flashSummary,
           cached: false,
         },
