@@ -105,29 +105,48 @@ class GeminiService {
     }
   }
 
-  async generateAudio(script: string) {
+    async generateAudio(script: string) {
     try {
-      const response = await this.client.models.generateContent({
-        model: 'gemini-2.5-flash-preview-tts',
-        contents: [{ parts: [{ text: script }] }],
-        config: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            multiSpeakerVoiceConfig: {
-              speakerVoiceConfigs: [
-                { speaker: 'Joe', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
-                { speaker: 'Jane', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-              ],
-            },
-          },
-        },
-      });
-      return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+      const apiKey = Deno.env.get('GOOGLE_CLOUD_TTS_API_KEY');
+      if (!apiKey) {
+        console.error('Missing GOOGLE_CLOUD_TTS_API_KEY');
+        return null;
+      }
+
+      const response = await fetch(
+        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: { text: script },
+            voice: { languageCode: 'en-US', name: 'en-US-Wavenet-D' },
+            audioConfig: { audioEncoding: 'MP3' },
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Google TTS Error:', data);
+        return null;
+      }
+
+      // audioContent is already base64 MP3
+      const audioContent = data?.audioContent;
+      if (!audioContent || typeof audioContent !== 'string' || audioContent.length < 50) {
+        console.error('Google TTS returned empty/invalid audioContent');
+        return null;
+      }
+
+      return audioContent;
     } catch (error) {
-      console.error('TTS Synthesis Error:', error);
+      console.error('Google TTS Synthesis Error:', error);
       return null;
     }
   }
+
 
   async generateCoverArt(topic: string) {
     try {
@@ -315,7 +334,7 @@ serve(async (req) => {
     // Step 3: Generate audio (TTS)
     console.log('Generating audio...');
     const audioBase64 = await gemini.generateAudio(script || '');
-    const audioUrl = audioBase64 ? `data:audio/mp3;base64,${audioBase64}` : null;
+    const audioUrl = audioBase64 ? `data:audio/mpeg;base64,${audioBase64}` : null;
     console.log('Audio generated:', audioUrl ? 'success' : 'failed');
 
     // Step 4: Generate cover art
