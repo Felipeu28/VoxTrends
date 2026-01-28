@@ -49,15 +49,17 @@ function getPlanLimits(plan: string) {
 // ==================== GEMINI SERVICE ====================
 class GeminiService {
   private client: GoogleGenAI;
+  private apiKey: string;
 
   constructor(apiKey: string) {
     this.client = new GoogleGenAI({ apiKey });
+    this.apiKey = apiKey;
   }
 
   async fetchTrendingNews(region: string, language: string) {
     try {
       const response = await this.client.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.0-flash-exp',
         contents: `Research the top 5 trending news topics on X (Twitter) for: ${region}.
         Focus on real-time social velocity. Language: ${language}.
         Provide verified facts and specific details for a podcast summary.`,
@@ -82,7 +84,7 @@ class GeminiService {
   async generatePodcastScript(trends: string, language: string, duration: string = '1 minute') {
     try {
       const response = await this.client.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-2.0-flash-exp',
         contents: `Showrunner: 'VoxTrends'. Create a ${duration} podcast briefing for these trends: ${trends}.
         Language: ${language}.
 
@@ -105,12 +107,14 @@ class GeminiService {
     }
   }
 
-  async generateAudio(script: string) {
+  async generateAudio(script: string): Promise<{ data: string | null; error?: string }> {
     try {
-      const apiKey = Deno.env.get('GOOGLE_CLOUD_TTS_API_KEY');
+      // Try specific TTS key first, then fallback to general Gemini key
+      const apiKey = Deno.env.get('GOOGLE_CLOUD_TTS_API_KEY') || this.apiKey;
+
       if (!apiKey) {
-        console.error('Missing GOOGLE_CLOUD_TTS_API_KEY');
-        return null;
+        console.error('Missing GOOGLE_CLOUD_TTS_API_KEY and GEMINI_API_KEY');
+        return { data: null, error: 'Missing API Key for TTS' };
       }
 
       const response = await fetch(
@@ -130,20 +134,20 @@ class GeminiService {
 
       if (!response.ok) {
         console.error('Google TTS Error:', data);
-        return null;
+        return { data: null, error: `Google TTS Error: ${JSON.stringify(data)}` };
       }
 
       // audioContent is already base64 MP3
       const audioContent = data?.audioContent;
       if (!audioContent || typeof audioContent !== 'string' || audioContent.length < 50) {
         console.error('Google TTS returned empty/invalid audioContent');
-        return null;
+        return { data: null, error: 'Google TTS returned empty/invalid audioContent' };
       }
 
-      return audioContent;
-    } catch (error) {
+      return { data: audioContent };
+    } catch (error: any) {
       console.error('Google TTS Synthesis Error:', error);
-      return null;
+      return { data: null, error: `Synthesis Error: ${error.message}` };
     }
   }
 
@@ -338,9 +342,9 @@ serve(async (req) => {
 
     // Step 3: Generate audio (TTS)
     console.log('Generating audio...');
-    const audioBase64 = await gemini.generateAudio(script || '');
+    const { data: audioBase64, error: audioError } = await gemini.generateAudio(script || '');
     const audioUrl = audioBase64 ? `data:audio/mpeg;base64,${audioBase64}` : null;
-    console.log('Audio generated:', audioUrl ? 'success' : 'failed');
+    console.log('Audio generated:', audioUrl ? 'success' : 'failed', audioError ? `Error: ${audioError}` : '');
 
     // Step 4: Generate cover art
     console.log('Generating cover art...');
@@ -389,7 +393,7 @@ serve(async (req) => {
     await supabaseClient.from('usage_analytics').insert({
       user_id: user.id,
       action_type: 'generate_edition',
-      metadata: { editionType, region, language },
+      metadata: { editionType, region, language, audioError },
       cost_estimate: 0.15,
     });
 
@@ -401,6 +405,7 @@ serve(async (req) => {
           text: trendingNews,
           script: script || '',
           audio: audioUrl,
+          audioError, // Return the error to the client
           imageUrl,
           links: groundingLinks,
           flashSummary,
