@@ -29,38 +29,18 @@ interface DailyData {
 // Convert base64 audio to blob URL for playback
 const createAudioBlobUrl = (base64Audio: string): string => {
   try {
+    // Strip "data:audio/..." prefix if present to get raw base64
+    const base64 = base64Audio.includes(',') ? base64Audio.split(',')[1] : base64Audio;
+
     // Decode base64
-    const binaryString = atob(base64Audio.replace(/[\n\r\t\s]/g, ''));
+    const binaryString = atob(base64.replace(/[\n\r\t\s]/g, ''));
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    
-    // Create WAV file with headers
-    const dataSize = bytes.length;
-    const fileSize = 44 + dataSize;
-    const wavBuffer = new ArrayBuffer(fileSize);
-    const view = new DataView(wavBuffer);
-    
-    // WAV header
-    view.setUint32(0, 0x52494646, false); // "RIFF"
-    view.setUint32(4, fileSize - 8, true);
-    view.setUint32(8, 0x57415645, false); // "WAVE"
-    view.setUint32(12, 0x666d7420, false); // "fmt "
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true); // mono
-    view.setUint32(24, 24000, true); // sample rate
-    view.setUint32(28, 48000, true); // byte rate
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    view.setUint32(36, 0x64617461, false); // "data"
-    view.setUint32(40, dataSize, true);
-    
-    const pcmData = new Uint8Array(wavBuffer, 44);
-    pcmData.set(bytes);
-    
-    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+
+    // Create Blob directly from audio bytes (MP3)
+    const blob = new Blob([bytes], { type: 'audio/mpeg' });
     return URL.createObjectURL(blob);
   } catch (error) {
     console.error('Failed to create audio blob:', error);
@@ -71,7 +51,7 @@ const createAudioBlobUrl = (base64Audio: string): string => {
 const VOX_EDITIONS_KEY = 'vox_daily_editions_v3'; // Incremented for new structure
 
 // Helper function to create unique edition keys
-const getEditionKey = (type: EditionType, region: string, language: string) => 
+const getEditionKey = (type: EditionType, region: string, language: string) =>
   `${type}-${region}-${language}`;
 
 // ==================== HELPER COMPONENTS ====================
@@ -115,7 +95,7 @@ const Toast: React.FC<{ message: string; visible: boolean; onHide: () => void }>
 
 // Enhanced Audio Player Component
 // Enhanced Audio Player Component - Handles both URLs and base64
-const AudioPlayer: React.FC<{ 
+const AudioPlayer: React.FC<{
   audioData: string | null;  // Changed from audioUrl
   clipId: string;
   isPlaying: boolean;
@@ -126,7 +106,7 @@ const AudioPlayer: React.FC<{
 
   useEffect(() => {
     if (!audioData) return;
-    
+
     // Check if it's a URL or base64
     if (audioData.startsWith('http')) {
       // It's already a URL from Supabase
@@ -135,7 +115,7 @@ const AudioPlayer: React.FC<{
       // It's base64, convert to blob URL
       const blobUrl = createAudioBlobUrl(audioData);
       setAudioSrc(blobUrl);
-      
+
       // Cleanup blob URL when component unmounts
       return () => URL.revokeObjectURL(blobUrl);
     }
@@ -156,7 +136,7 @@ const AudioPlayer: React.FC<{
   return (
     <>
       <audio ref={audioRef} src={audioSrc} preload="metadata" />
-      <button 
+      <button
         onClick={onPlayPause}
         className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-3xl flex items-center justify-center shadow-2xl hover:scale-105 transition-all text-black"
       >
@@ -167,8 +147,8 @@ const AudioPlayer: React.FC<{
 };
 
 // Progress Bar Component
-const ProgressBar: React.FC<{ 
-  loading: boolean; 
+const ProgressBar: React.FC<{
+  loading: boolean;
   status: string;
   estimatedDuration?: number;
 }> = ({ loading, status, estimatedDuration = 25000 }) => {
@@ -195,7 +175,7 @@ const ProgressBar: React.FC<{
   return (
     <div className="fixed top-0 left-0 right-0 z-[60] bg-zinc-950/95 backdrop-blur-xl border-b border-violet-600/30">
       <div className="h-1 bg-zinc-900 overflow-hidden">
-        <div 
+        <div
           className="h-full bg-gradient-to-r from-violet-600 to-purple-500 transition-all duration-300 ease-out"
           style={{ width: `${progress}%` }}
         />
@@ -212,7 +192,7 @@ const ProgressBar: React.FC<{
 };
 
 // Expandable Research Display
-const ResearchDisplay: React.FC<{ 
+const ResearchDisplay: React.FC<{
   result: { text: string; grounding: GroundingLink[] };
   language: string;
 }> = ({ result, language }) => {
@@ -221,13 +201,13 @@ const ResearchDisplay: React.FC<{
   return (
     <div className="space-y-6">
       <h4 className="text-2xl font-serif font-bold">Research Dossier</h4>
-      
+
       <div className={`text-sm text-zinc-400 border-l border-zinc-800 pl-4 italic ${expanded ? '' : 'line-clamp-10'}`}>
         <RichText text={result.text} language={language} />
       </div>
 
       {result.text.split('\n').length > 10 && (
-        <button 
+        <button
           onClick={() => setExpanded(!expanded)}
           className="text-violet-400 hover:text-violet-300 text-sm font-bold"
         >
@@ -240,7 +220,7 @@ const ResearchDisplay: React.FC<{
           <h5 className="text-sm font-bold text-zinc-500 uppercase tracking-widest">Verified Sources</h5>
           <div className="space-y-2">
             {result.grounding.map((link, i) => (
-              <a 
+              <a
                 key={i}
                 href={link.uri}
                 target="_blank"
@@ -259,7 +239,7 @@ const ResearchDisplay: React.FC<{
 };
 
 // Auto-Scrolling Chat Component with Mobile-Optimized Collapsible Design
-const InterrogationHub: React.FC<{ 
+const InterrogationHub: React.FC<{
   context: string;
   language: string;
   history: ChatMessage[];
@@ -279,10 +259,10 @@ const InterrogationHub: React.FC<{
 
   const handleAsk = async () => {
     if (!question.trim()) return;
-    
+
     // Auto-expand when user asks first question
     if (collapsed) setCollapsed(false);
-    
+
     setThinking(true);
     const q = question;
     setQuestion('');
@@ -411,7 +391,7 @@ const InterrogationHub: React.FC<{
 
 // Share Modal Component
 // Enhanced Share Modal with Beautiful PDF Export
-const ShareModal: React.FC<{ 
+const ShareModal: React.FC<{
   clip: { title: string; imageUrl: string | null; audio: string | null; text: string };
   language: string;
   onClose: () => void;
@@ -424,7 +404,7 @@ const ShareModal: React.FC<{
       alert('Please allow popups to export PDF');
       return;
     }
-    
+
     // Create beautiful HTML for PDF
     const htmlContent = `
 <!DOCTYPE html>
@@ -641,10 +621,10 @@ const ShareModal: React.FC<{
 </body>
 </html>
     `;
-    
+
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-    
+
     // Wait for content to load, then trigger print
     setTimeout(() => {
       printWindow.print();
@@ -683,7 +663,7 @@ const ShareModal: React.FC<{
               <p className="text-sm text-zinc-600">Professional intelligence report with branding</p>
             </div>
           </button>
-          
+
           <button
             onClick={() => {
               navigator.clipboard.writeText(clip.text);
@@ -714,7 +694,7 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const [authLoading, setAuthLoading] = useState(true);
-  
+
   // Application state
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'landing' | 'dashboard' | 'profile'>('landing');
@@ -727,7 +707,7 @@ const App: React.FC = () => {
   const [savedClips, setSavedClips] = useState<SavedClip[]>([]);
   const [playingClipId, setPlayingClipId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [shareClip, setShareClip] = useState<{ 
+  const [shareClip, setShareClip] = useState<{
     title: string;
     imageUrl: string | null;
     audio: string | null;
@@ -749,7 +729,7 @@ const App: React.FC = () => {
       try {
         const currentUser = await auth.getCurrentUser();
         setAuthUser(currentUser);
-        
+
         if (currentUser) {
           const profile = await db.getUser(currentUser.id);
           if (profile) {
@@ -766,7 +746,7 @@ const App: React.FC = () => {
             setRegion(profile.region);
             setLanguage(profile.language);
             setView('dashboard');
-            
+
             // Load user's saved clips
             const clips = await db.getUserClips(currentUser.id);
             setSavedClips(clips.map(clip => ({
@@ -791,9 +771,9 @@ const App: React.FC = () => {
         setAuthLoading(false);
       }
     };
-    
+
     initAuth();
-    
+
     const { data: { subscription } } = auth.onAuthStateChange(async (user) => {
       setAuthUser(user);
       if (user) {
@@ -817,7 +797,7 @@ const App: React.FC = () => {
         setView('landing');
       }
     });
-    
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -844,7 +824,7 @@ const App: React.FC = () => {
     }
 
     const editionKey = getEditionKey(ed, region, language);
-    
+
     // If edition exists locally and not forcing refresh, just show it
     if (!forceRefresh && dailyEditions[editionKey]) {
       setToastMessage(`✨ Already loaded: ${ed} · ${region} · ${language}`);
@@ -853,19 +833,19 @@ const App: React.FC = () => {
 
     setLoading(true);
     setStatus('Checking limits & cache...');
-    
+
     try {
       // ✅ NOW USING BACKEND FUNCTION THAT CHECKS LIMITS!
       const result = await backend.generateEdition(ed, region, language);
-      
+
       if (result.cached) {
         setStatus('Loading cached edition...');
       } else {
         setStatus('Generating fresh edition...');
       }
-      
+
       const { text, script, audio, imageUrl, links, flashSummary } = result.data;
-      
+
       const newData: DailyData = {
         text,
         script,
@@ -875,23 +855,23 @@ const App: React.FC = () => {
         flashSummary: flashSummary,
         chatHistory: []
       };
-      
+
       setDailyEditions(prev => ({ ...prev, [editionKey]: newData }));
       await voxDB.set(VOX_EDITIONS_KEY, { ...dailyEditions, [editionKey]: newData });
-      
+
       setToastMessage(`🎉 ${ed} edition ready!`);
       setQuotaRefreshTrigger(prev => prev + 1); // Refresh quota display
-      
+
     } catch (error: any) {
       console.error('Generate edition error:', error);
-      
+
       // ✅ CHECK IF IT'S A LIMIT ERROR
       if (error.upgrade) {
         setShowPricing(true);
         setToastMessage(`Daily limit reached! Upgrade for unlimited.`);
         return;
       }
-      
+
       setToastMessage(error.message || 'Failed to generate edition. Please try again.');
     } finally {
       setLoading(false);
@@ -902,15 +882,15 @@ const App: React.FC = () => {
 
   const handleConductResearch = async () => {
     if (!searchQuery.trim() || !authUser) return;
-    
+
     setLoading(true);
     setStatus('Checking research limits...');
     setStep(1);
-    
+
     try {
       // ✅ NOW USING BACKEND FUNCTION THAT CHECKS LIMITS!
       const result = await backend.conductResearch(searchQuery, region, language);
-      
+
       if (result.data) {
         setResearchResult(result.data);
         setStep(2);
@@ -918,7 +898,7 @@ const App: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Research error:', error);
-      
+
       // ✅ CHECK IF IT'S A LIMIT ERROR
       if (error.upgrade) {
         setShowPricing(true);
@@ -926,7 +906,7 @@ const App: React.FC = () => {
         setStep(0);
         return;
       }
-      
+
       setToastMessage('Research failed. Please try refining your query.');
       setStep(0);
     } finally {
@@ -944,14 +924,14 @@ const App: React.FC = () => {
       setToastMessage('Please log in to save clips');
       return;
     }
-    
+
     try {
       setLoading(true);
       setStatus('Saving to vault...');
-      
+
       let audioUrl: string | undefined;
       let imageUrl: string | undefined;
-      
+
       if ((data as DailyData).audio) {
         setStatus('Uploading audio to cloud...');
         try {
@@ -969,7 +949,7 @@ const App: React.FC = () => {
           console.error('Audio upload error:', error);
         }
       }
-      
+
       if ((data as DailyData).imageUrl) {
         setStatus('Uploading image to cloud...');
         try {
@@ -982,7 +962,7 @@ const App: React.FC = () => {
           console.error('Image upload error:', error);
         }
       }
-      
+
       setStatus('Saving metadata...');
       const clip = await db.saveClip(
         authUser.id,
@@ -996,7 +976,7 @@ const App: React.FC = () => {
           chatHistory: (data as DailyData).chatHistory,
         }
       );
-      
+
       const newClip: SavedClip = {
         id: clip.id,
         title: clip.title,
@@ -1008,13 +988,13 @@ const App: React.FC = () => {
         flashSummary: clip.flash_summary || '',
         chatHistory: clip.chat_history || [],
       };
-      
+
       setSavedClips(prev => [newClip, ...prev]);
       setToastMessage('âœ… Saved to cloud vault!');
       setStatus('');
-      
+
       await db.logUsage(authUser.id, 'save_clip', { type, title });
-      
+
     } catch (error) {
       console.error('Save to vault error:', error);
       setToastMessage('Failed to save. Please try again.');
@@ -1062,7 +1042,7 @@ const App: React.FC = () => {
       </div>
     );
   }
-  
+
   if (!authUser) {
     if (authView === 'login') {
       return <LoginScreen onSwitchToSignup={() => setAuthView('signup')} />;
@@ -1073,7 +1053,7 @@ const App: React.FC = () => {
 
   const currentEditionKey = getEditionKey(activeTab, region, language);
   const currentDaily = dailyEditions[currentEditionKey];
-  
+
   // Count how many versions of this edition type exist
   const editionVariants = Object.keys(dailyEditions).filter(k => k.startsWith(activeTab)).length;
 
@@ -1081,9 +1061,9 @@ const App: React.FC = () => {
     <div className="h-screen bg-[#050505] text-zinc-100 flex flex-col md:flex-row overflow-hidden font-sans">
       <Toast message={toastMessage || ''} visible={!!toastMessage} onHide={() => setToastMessage(null)} />
       <ProgressBar loading={loading} status={status} />
-      
+
       {shareClip && (
-        <ShareModal 
+        <ShareModal
           clip={shareClip}
           language={language}
           onClose={() => setShareClip(null)}
@@ -1092,9 +1072,9 @@ const App: React.FC = () => {
 
       {/* Pricing Modal */}
       {showPricing && (
-        <PricingPage 
-          onClose={() => setShowPricing(false)} 
-          userPlan={user?.plan || 'Free'} 
+        <PricingPage
+          onClose={() => setShowPricing(false)}
+          userPlan={user?.plan || 'Free'}
         />
       )}
 
@@ -1194,11 +1174,11 @@ const App: React.FC = () => {
           {user?.plan === 'Free' && (
             <>
               {/* Quota Display */}
-              <QuotaDisplay 
-                userPlan={user.plan} 
+              <QuotaDisplay
+                userPlan={user.plan}
                 onUpdate={quotaRefreshTrigger}
               />
-              
+
               {/* Upgrade Button */}
               <button
                 onClick={() => setShowPricing(true)}
@@ -1208,7 +1188,7 @@ const App: React.FC = () => {
               </button>
             </>
           )}
-          
+
           {user?.plan === 'Pro' && (
             <div className="p-4 bg-emerald-600/10 border border-emerald-600/20 rounded-2xl text-center">
               <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">✨ Pro Member</p>
@@ -1279,11 +1259,10 @@ const App: React.FC = () => {
                   <button
                     key={ed}
                     onClick={() => setActiveTab(ed)}
-                    className={`px-3 md:px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
-                      activeTab === ed
+                    className={`px-3 md:px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === ed
                         ? 'bg-violet-600 border-violet-600 text-white'
                         : 'bg-transparent border-zinc-800 text-zinc-500'
-                    }`}
+                      }`}
                   >
                     {ed}
                   </button>
@@ -1509,7 +1488,7 @@ const App: React.FC = () => {
                   {step === 2 && researchResult && (
                     <div className="space-y-8 animate-in fade-in">
                       <ResearchDisplay result={researchResult} language={language} />
-                      
+
                       <div className="flex flex-col gap-3">
                         <button
                           onClick={() => saveToVault(`Research: ${searchQuery}`, researchResult, 'Research')}
@@ -1536,160 +1515,158 @@ const App: React.FC = () => {
           )}
 
           {/* Profile/Vault View */}
-{view === 'profile' && user && (
-  <div className="max-w-4xl mx-auto space-y-12 pb-20 animate-in fade-in">
-    <section className="flex flex-col md:flex-row items-center gap-10 p-12 bg-zinc-900/20 border border-zinc-900 rounded-[3rem]">
-      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-violet-600 shadow-2xl">
-        <img src={user.avatar} className="w-full h-full object-cover" alt={user.name} />
-      </div>
-      <div className="space-y-2 text-center md:text-left">
-        <h3 className="text-4xl font-serif font-bold text-white">{user.name}</h3>
-        <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">
-          Vox Investigator // Since {user.memberSince}
-        </p>
-        <div className="flex justify-center md:justify-start gap-4 pt-4">
-          <div className="px-4 py-2 bg-violet-600/10 border border-violet-600/20 rounded-xl">
-            <p className="text-[10px] text-violet-500 font-black uppercase">Plan</p>
-            <p className="text-sm font-bold">{user.plan}</p>
-          </div>
-          <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-            <p className="text-[10px] text-zinc-500 font-black uppercase">Vault Storage</p>
-            <p className="text-sm font-bold">{savedClips.length} items</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section className="space-y-8">
-      <h4 className="text-2xl font-serif font-bold flex items-center gap-4">
-        Intelligence Vault
-        <div className="h-[1px] flex-1 bg-zinc-900" />
-      </h4>
-
-      {savedClips.length === 0 ? (
-        <div className="py-20 text-center bg-zinc-950 border border-dashed border-zinc-800 rounded-[3rem] text-zinc-600 font-serif italic">
-          Your vault is currently empty. Start investigating to store intel here.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {savedClips.map(clip => (
-            <div
-              key={clip.id}
-              className="p-8 bg-zinc-900/50 border border-zinc-800 rounded-[2.5rem] hover:border-violet-600/50 transition-all group relative overflow-hidden"
-            >
-              <div className="absolute top-4 right-4 flex gap-2">
-                <button
-                  onClick={() => removeFromVault(clip.id)}
-                  className="p-2 bg-zinc-950 rounded-lg text-zinc-600 hover:text-red-500 transition-colors"
-                >
-                  <ICONS.Trash className="w-4 h-4" />
-                </button>
-              </div>
-
-              <span className="text-[9px] font-black text-violet-500 uppercase tracking-widest mb-2 block">
-                {clip.type} // {clip.date}
-              </span>
-              <h5 className="text-xl font-bold text-white mb-4">{clip.title}</h5>
-
-              <div className="flex gap-4">
-                {clip.audioData && (
-                  <button
-                    onClick={() => {
-                      if (playingClipId === clip.id) {
-                        setPlayingClipId(null);
-                      } else {
-                        setPlayingClipId(clip.id);
-                      }
-                    }}
-                    className="flex-1 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-violet-600 hover:text-white transition-all"
-                  >
-                    {playingClipId === clip.id ? 'PAUSE' : 'PLAY'}
-                  </button>
-                )}
-                <button
-                  onClick={() =>
-                    setShareClip({
-                      title: clip.title,
-                      audio: clip.audioData || null,
-                      imageUrl: clip.imageUrl || null,
-                      text: clip.text,
-                    })
-                  }
-                  className="px-6 py-3 bg-zinc-950 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:text-white transition-all"
-                >
-                  OPEN
-                </button>
-              </div>
-
-              {/* Hidden Audio Element for Playback - INSIDE clip card */}
-              {clip.audioData && (
-                <div className="hidden">
-                  <AudioPlayer
-                    audioData={clip.audioData}
-                    clipId={clip.id}
-                    isPlaying={playingClipId === clip.id}
-                    onPlayPause={() => {
-                      if (playingClipId === clip.id) {
-                        setPlayingClipId(null);
-                      } else {
-                        setPlayingClipId(clip.id);
-                      }
-                    }}
-                  />
+          {view === 'profile' && user && (
+            <div className="max-w-4xl mx-auto space-y-12 pb-20 animate-in fade-in">
+              <section className="flex flex-col md:flex-row items-center gap-10 p-12 bg-zinc-900/20 border border-zinc-900 rounded-[3rem]">
+                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-violet-600 shadow-2xl">
+                  <img src={user.avatar} className="w-full h-full object-cover" alt={user.name} />
                 </div>
-              )}
+                <div className="space-y-2 text-center md:text-left">
+                  <h3 className="text-4xl font-serif font-bold text-white">{user.name}</h3>
+                  <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">
+                    Vox Investigator // Since {user.memberSince}
+                  </p>
+                  <div className="flex justify-center md:justify-start gap-4 pt-4">
+                    <div className="px-4 py-2 bg-violet-600/10 border border-violet-600/20 rounded-xl">
+                      <p className="text-[10px] text-violet-500 font-black uppercase">Plan</p>
+                      <p className="text-sm font-bold">{user.plan}</p>
+                    </div>
+                    <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+                      <p className="text-[10px] text-zinc-500 font-black uppercase">Vault Storage</p>
+                      <p className="text-sm font-bold">{savedClips.length} items</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-8">
+                <h4 className="text-2xl font-serif font-bold flex items-center gap-4">
+                  Intelligence Vault
+                  <div className="h-[1px] flex-1 bg-zinc-900" />
+                </h4>
+
+                {savedClips.length === 0 ? (
+                  <div className="py-20 text-center bg-zinc-950 border border-dashed border-zinc-800 rounded-[3rem] text-zinc-600 font-serif italic">
+                    Your vault is currently empty. Start investigating to store intel here.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {savedClips.map(clip => (
+                      <div
+                        key={clip.id}
+                        className="p-8 bg-zinc-900/50 border border-zinc-800 rounded-[2.5rem] hover:border-violet-600/50 transition-all group relative overflow-hidden"
+                      >
+                        <div className="absolute top-4 right-4 flex gap-2">
+                          <button
+                            onClick={() => removeFromVault(clip.id)}
+                            className="p-2 bg-zinc-950 rounded-lg text-zinc-600 hover:text-red-500 transition-colors"
+                          >
+                            <ICONS.Trash className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <span className="text-[9px] font-black text-violet-500 uppercase tracking-widest mb-2 block">
+                          {clip.type} // {clip.date}
+                        </span>
+                        <h5 className="text-xl font-bold text-white mb-4">{clip.title}</h5>
+
+                        <div className="flex gap-4">
+                          {clip.audioData && (
+                            <button
+                              onClick={() => {
+                                if (playingClipId === clip.id) {
+                                  setPlayingClipId(null);
+                                } else {
+                                  setPlayingClipId(clip.id);
+                                }
+                              }}
+                              className="flex-1 py-3 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-violet-600 hover:text-white transition-all"
+                            >
+                              {playingClipId === clip.id ? 'PAUSE' : 'PLAY'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() =>
+                              setShareClip({
+                                title: clip.title,
+                                audio: clip.audioData || null,
+                                imageUrl: clip.imageUrl || null,
+                                text: clip.text,
+                              })
+                            }
+                            className="px-6 py-3 bg-zinc-950 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:text-white transition-all"
+                          >
+                            OPEN
+                          </button>
+                        </div>
+
+                        {/* Hidden Audio Element for Playback - INSIDE clip card */}
+                        {clip.audioData && (
+                          <div className="hidden">
+                            <AudioPlayer
+                              audioData={clip.audioData}
+                              clipId={clip.id}
+                              isPlaying={playingClipId === clip.id}
+                              onPlayPause={() => {
+                                if (playingClipId === clip.id) {
+                                  setPlayingClipId(null);
+                                } else {
+                                  setPlayingClipId(clip.id);
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
-          ))}
+          )}
+
+          {/* Mobile Bottom Navigation - OUTSIDE profile view */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950 border-t border-zinc-800 safe-area-pb">
+            <div className="flex items-center justify-around py-3 px-4">
+              <button
+                onClick={() => setView('dashboard')}
+                className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'dashboard'
+                    ? 'bg-violet-600/20 text-violet-400'
+                    : 'text-zinc-500'
+                  }`}
+              >
+                <ICONS.Trend className="w-6 h-6" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">News</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setView('dashboard');
+                  setTimeout(() => {
+                    const researchSection = document.getElementById('research-section');
+                    researchSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 100);
+                }}
+                className="flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all text-zinc-500"
+              >
+                <ICONS.Search className="w-6 h-6" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Research</span>
+              </button>
+
+              <button
+                onClick={() => setView('profile')}
+                className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'profile'
+                    ? 'bg-violet-600/20 text-violet-400'
+                    : 'text-zinc-500'
+                  }`}
+              >
+                <ICONS.FileText className="w-6 h-6" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Vault</span>
+              </button>
+              {/* Closing the nested divs inside main */}
+            </div>
+          </div>
         </div>
-      )}
-    </section>
-  </div>
-)}
-
-{/* Mobile Bottom Navigation - OUTSIDE profile view */}
-<div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950 border-t border-zinc-800 safe-area-pb">
-  <div className="flex items-center justify-around py-3 px-4">
-    <button
-      onClick={() => setView('dashboard')}
-      className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
-        view === 'dashboard'
-          ? 'bg-violet-600/20 text-violet-400'
-          : 'text-zinc-500'
-      }`}
-    >
-      <ICONS.Trend className="w-6 h-6" />
-      <span className="text-[10px] font-bold uppercase tracking-wide">News</span>
-    </button>
-
-    <button
-      onClick={() => {
-        setView('dashboard');
-        setTimeout(() => {
-          const researchSection = document.getElementById('research-section');
-          researchSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-      }}
-      className="flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all text-zinc-500"
-    >
-      <ICONS.Search className="w-6 h-6" />
-      <span className="text-[10px] font-bold uppercase tracking-wide">Research</span>
-    </button>
-
-    <button
-      onClick={() => setView('profile')}
-      className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${
-        view === 'profile'
-          ? 'bg-violet-600/20 text-violet-400'
-          : 'text-zinc-500'
-      }`}
-    >
-      <ICONS.FileText className="w-6 h-6" />
-      <span className="text-[10px] font-bold uppercase tracking-wide">Vault</span>
-    </button>
- {/* Closing the nested divs inside main */}
-      </div>
-      </div>
-      </div>
       </main>
 
       {/* Floating Audio Player - OUTSIDE main, INSIDE root */}
@@ -1713,7 +1690,7 @@ const App: React.FC = () => {
           <AudioVisualizer isPlaying={true} />
         </div>
       )}
-      
+
     </div>
   );
 };
