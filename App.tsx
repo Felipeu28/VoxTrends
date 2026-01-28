@@ -24,6 +24,7 @@ interface DailyData {
   imageUrl: string | null;
   flashSummary?: string;
   chatHistory?: ChatMessage[];
+  date?: string; // Added date for daily reset check
 }
 
 // Convert base64 audio to blob URL for playback
@@ -824,15 +825,20 @@ const App: React.FC = () => {
     }
 
     const editionKey = getEditionKey(ed, region, language);
+    const todayStr = new Date().toLocaleDateString(); // Local date string
 
-    // If edition exists locally and not forcing refresh, just show it
-    if (!forceRefresh && dailyEditions[editionKey]) {
+    // Check if edition exists locally AND matches today's date
+    const cachedEdition = dailyEditions[editionKey];
+    const isToday = cachedEdition?.date === todayStr;
+
+    // If edition exists locally, matches today, and not forcing refresh, just show it
+    if (!forceRefresh && cachedEdition && isToday) {
       setToastMessage(`✨ Already loaded: ${ed} · ${region} · ${language}`);
       return;
     }
 
     setLoading(true);
-    setStatus('Checking limits & cache...');
+    setStatus(forceRefresh ? 'Refreshing edition...' : 'Checking limits & cache...');
 
     try {
       // ✅ NOW USING BACKEND FUNCTION THAT CHECKS LIMITS!
@@ -853,7 +859,8 @@ const App: React.FC = () => {
         links: links || [],
         imageUrl: imageUrl || null,
         flashSummary: flashSummary,
-        chatHistory: []
+        chatHistory: [],
+        date: todayStr // Save today's date
       };
 
       setDailyEditions(prev => ({ ...prev, [editionKey]: newData }));
@@ -1260,8 +1267,8 @@ const App: React.FC = () => {
                     key={ed}
                     onClick={() => setActiveTab(ed)}
                     className={`px-3 md:px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === ed
-                        ? 'bg-violet-600 border-violet-600 text-white'
-                        : 'bg-transparent border-zinc-800 text-zinc-500'
+                      ? 'bg-violet-600 border-violet-600 text-white'
+                      : 'bg-transparent border-zinc-800 text-zinc-500'
                       }`}
                   >
                     {ed}
@@ -1631,8 +1638,8 @@ const App: React.FC = () => {
               <button
                 onClick={() => setView('dashboard')}
                 className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'dashboard'
-                    ? 'bg-violet-600/20 text-violet-400'
-                    : 'text-zinc-500'
+                  ? 'bg-violet-600/20 text-violet-400'
+                  : 'text-zinc-500'
                   }`}
               >
                 <ICONS.Trend className="w-6 h-6" />
@@ -1656,8 +1663,8 @@ const App: React.FC = () => {
               <button
                 onClick={() => setView('profile')}
                 className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'profile'
-                    ? 'bg-violet-600/20 text-violet-400'
-                    : 'text-zinc-500'
+                  ? 'bg-violet-600/20 text-violet-400'
+                  : 'text-zinc-500'
                   }`}
               >
                 <ICONS.FileText className="w-6 h-6" />
