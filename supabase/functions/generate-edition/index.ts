@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 };
 
 function handleCors(req: Request) {
@@ -188,8 +189,19 @@ serve(async (req) => {
   if (corsResponse) return corsResponse;
 
   try {
-    // Parse request body
-    const { editionType, region, language } = await req.json();
+    // Check if the request body is valid JSON
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error('Invalid JSON body:', e);
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { editionType, region, language } = body;
 
     console.log('Edition request:', { editionType, region, language });
 
