@@ -124,7 +124,7 @@ class GeminiService {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             input: { text: script },
-            voice: { languageCode: 'en-US', name: 'en-US-Wavenet-D' },
+            voice: { languageCode: 'en-US', name: 'en-US-Standard-D' },
             audioConfig: { audioEncoding: 'MP3' },
           }),
         }
@@ -176,7 +176,7 @@ class GeminiService {
   async generateFlashSummary(text: string, language: string) {
     try {
       const response = await this.client.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.0-flash-exp',
         contents: `3 punchy bullet points summary of: ${text}. Language: ${language}.`,
       });
       return response.text;
