@@ -131,6 +131,7 @@ class GeminiService {
         generationConfig: {
           responseModalities: ['AUDIO'],
           speechConfig: {
+            audioEncoding: "MP3",
             multiSpeakerVoiceConfig: {
               speakerVoiceConfigs: [
                 { speaker: 'Joe', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
