@@ -115,10 +115,17 @@ class GeminiService {
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
-            text: `Research the top 5 trending news topics on X (Twitter) for: ${region}.
-        Focus on real-time social velocity. Language: ${language}.
-        Provide verified facts and specific details for a podcast summary.
-        Do not use emojis or markdown bolding in the output.` }]
+            text: `You are a news analyst. Research the top 5 trending topics on X (Twitter) in ${region} right now.
+
+For EACH topic, provide:
+- The topic name/headline
+- Why it's trending (context)
+- Key facts and verified information
+- Notable reactions or perspectives
+
+Write in ${language}. Use clear paragraphs, not just bullet points. 
+Aim for 2-3 sentences per topic minimum.
+Do not use emojis or markdown formatting in the output.` }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
@@ -268,9 +275,9 @@ serve(async (req) => {
       );
     }
 
-    const { editionType, region, language } = body;
+    const { editionType, region, language, forceRefresh } = body;
 
-    console.log('Edition request:', { editionType, region, language });
+    console.log('Edition request:', { editionType, region, language, forceRefresh });
 
     // Validate inputs
     if (!editionType || !region || !language) {
@@ -360,40 +367,44 @@ serve(async (req) => {
       );
     }
 
-    // Check for cached edition first
-    const { data: cachedEdition } = await supabaseClient
-      .from('daily_editions')
-      .select('*')
-      .eq('edition_type', editionType)
-      .eq('region', region)
-      .eq('language', language)
-      .eq('date', today)
-      .gt('expires_at', new Date().toISOString())
-      .single();
+    // Check for cached edition (SKIP if forceRefresh is true)
+    if (!forceRefresh) {
+      const { data: cachedEdition } = await supabaseClient
+        .from('daily_editions')
+        .select('*')
+        .eq('edition_type', editionType)
+        .eq('region', region)
+        .eq('language', language)
+        .eq('date', today)
+        .gt('expires_at', new Date().toISOString())
+        .single();
 
-    if (cachedEdition) {
-      console.log('Returning cached edition');
+      if (cachedEdition) {
+        console.log('Returning cached edition');
 
-      // Still increment usage for cached editions
-      await supabaseClient.rpc('increment_daily_usage', {
-        p_user_id: user.id,
-        p_action: 'edition',
-      });
+        // Still increment usage for cached editions
+        await supabaseClient.rpc('increment_daily_usage', {
+          p_user_id: user.id,
+          p_action: 'edition',
+        });
 
-      return new Response(
-        JSON.stringify({
-          data: {
-            text: cachedEdition.content,
-            script: cachedEdition.script,
-            audio: cachedEdition.audio_url,
-            imageUrl: cachedEdition.image_url,
-            links: cachedEdition.grounding_links,
-            flashSummary: cachedEdition.flash_summary,
-            cached: true,
-          },
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+        return new Response(
+          JSON.stringify({
+            data: {
+              text: cachedEdition.content,
+              script: cachedEdition.script,
+              audio: cachedEdition.audio_url,
+              imageUrl: cachedEdition.image_url,
+              links: cachedEdition.grounding_links,
+              flashSummary: cachedEdition.flash_summary,
+              cached: true,
+            },
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else {
+      console.log('Force refresh requested - skipping cache');
     }
 
     console.log('Generating new edition...');
