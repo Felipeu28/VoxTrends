@@ -1419,6 +1419,10 @@ const App: React.FC = () => {
                             src={currentDaily.imageUrl}
                             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                             alt={`${activeTab} Edition`}
+                            onError={(e) => {
+                              console.error('Frontend Image Load Error');
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1478737270239-2fccd2c7862a?auto=format&fit=crop&q=80&w=1200';
+                            }}
                           />
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8">
