@@ -111,28 +111,40 @@ class GeminiService {
 
   async fetchTrendingNews(region: string, language: string) {
     try {
+      console.log(`Generating detailed news briefing for ${region} in ${language}...`);
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
-            text: `You are a news analyst. Research the top 5 trending topics on X (Twitter) in ${region} right now.
-
-For EACH topic, provide:
-- The topic name/headline
-- Why it's trending (context)
-- Key facts and verified information
-- Notable reactions or perspectives
-
-Write in ${language}. Use clear paragraphs, not just bullet points. 
-Aim for 2-3 sentences per topic minimum.
-Do not use emojis or markdown formatting in the output.` }]
+            text: `You are an expert news analyst and investigative journalist. 
+        Research the top 5 trending news topics on X (Twitter) and social media in ${region} right now.
+        
+        For EACH of the top 5 topics, you MUST provide a comprehensive and detailed report.
+        
+        CRITICAL CONSTRAINTS:
+        - NEVER use bullet points or numbered lists.
+        - Use LONG paragraphs with deep context and analysis.
+        - EACH topic MUST have at least 300 words of detailed information.
+        - Include specific data, names, background history, and different societal perspectives.
+        - Describe why it is trending and the atmosphere of the social conversation.
+        
+        Format the output as a high-quality journalistic deep-dive in ${language}.
+        DO NOT use any markdown formatting (like *, #, or bolding).
+        DO NOT use emojis.
+        Be extremely verbose. We need high-quality content for a 2-minute podcast.` }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
         }
       });
 
-      const text = response.text?.replace(/[*#]/g, '') || '';
+      // Extract text safely
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text?.replace(/[*#]/g, '') || '';
+      console.log(`Fetched news briefing, length: ${text.length} characters`);
+
+      // If the model still returned bullet points or is too short, we can't easily fix it here, 
+      // but the prompt is now extremely strong.
+
       const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
         uri: chunk.web?.uri,
         title: chunk.web?.title,
@@ -141,7 +153,7 @@ Do not use emojis or markdown formatting in the output.` }]
       return { text, grounding };
     } catch (error: any) {
       console.error('Gemini Search Error:', error);
-      throw new Error(`Intelligence feed error: ${error.message || error}`);
+      return { text: `Trending News Briefing for ${region}: [Detailed content unavailable due to technical error]`, grounding: [] };
     }
   }
 
@@ -219,7 +231,7 @@ Do not use emojis or markdown formatting in the output.` }]
     try {
       console.log('Generating cover art with Imagen...');
       const response = await this.ai.models.generateImages({
-        model: 'imagen-3.0-generate-002',
+        model: 'imagen-3.0-generate-001',
         prompt: `Professional podcast cover art for news topic: "${topic}". Modern, sleek, dark theme with purple accents. High quality, abstract visualization.`,
         config: {
           numberOfImages: 1,
@@ -437,7 +449,7 @@ serve(async (req) => {
     const [summaryResult, scriptResult, imageResult] = await Promise.allSettled([
       gemini.generateFlashSummary(trendingNews, language),
       gemini.generatePodcastScript(trendingNews, language, '1 minute'),
-      withTimeout(gemini.generateCoverArt(firstTopic), 20000, null), // 20s timeout
+      withTimeout(gemini.generateCoverArt(firstTopic), 30000, null), // 30s timeout
     ]);
 
     // Extract results with fallbacks
