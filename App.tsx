@@ -84,7 +84,18 @@ const RichText: React.FC<{ text: string; language: string }> = ({ text, language
             </h4>
           );
         }
-        return <p key={i} className="text-base md:text-xl font-light leading-relaxed text-zinc-300 opacity-90">{line}</p>;
+
+        // Handle bold text (**)
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        return (
+          <p key={i} className="text-base md:text-xl font-light leading-relaxed text-zinc-300 opacity-90">
+            {parts.map((part, index) =>
+              part.startsWith('**') && part.endsWith('**')
+                ? <strong key={index} className="font-bold text-white">{part.slice(2, -2)}</strong>
+                : part
+            )}
+          </p>
+        );
       })}
     </div>
   );
