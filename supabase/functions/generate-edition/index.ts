@@ -86,18 +86,21 @@ function createWavHeader(pcmLength: number): Uint8Array {
 
 // Helper: Convert base64 PCM to base64 WAV
 function pcmToWav(pcmBase64: string): string {
-  const pcmBytes = Uint8Array.from(atob(pcmBase64), c => c.charCodeAt(0));
+  const pcmBytes = Uint8Array.from(atob(pcmBase64), (c) => c.charCodeAt(0));
   const wavHeader = createWavHeader(pcmBytes.length);
   const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
   wavBytes.set(wavHeader, 0);
   wavBytes.set(pcmBytes, wavHeader.length);
 
-  // Convert to base64
-  let binary = '';
-  for (let i = 0; i < wavBytes.length; i++) {
-    binary += String.fromCharCode(wavBytes[i]);
+  // Memory-efficient Uint8Array to Base64
+  const chunks: string[] = [];
+  const chunkSize = 0x8000; // 32KB chunks
+  for (let i = 0; i < wavBytes.length; i += chunkSize) {
+    const chunk = wavBytes.subarray(i, Math.min(i + chunkSize, wavBytes.length));
+    // @ts-ignore: String.fromCharCode.apply is faster than a manual loop
+    chunks.push(String.fromCharCode.apply(null, chunk));
   }
-  return btoa(binary);
+  return btoa(chunks.join(''));
 }
 
 class GeminiService {
@@ -123,14 +126,14 @@ class GeminiService {
         
         CRITICAL CONSTRAINTS:
         - NEVER use numbered lists.
-        - Use LONG paragraphs with deep context and analysis.
+        - Use 3-4 LONG paragraphs with deep context and analysis.
         - Describe why it is trending and the atmosphere of the social conversation.
         - Include specific data, names, background history, and different societal perspectives.
         
         Format the output as a high-quality journalistic deep-dive in ${language}.
         You MAY use simple markdown like headers (#) and bolding (**) for readability.
         DO NOT use emojis.
-        Be extremely verbose. We need high-quality content for a 2-minute podcast.` }]
+        Be extremely informative. Focus on qualitative density rather than just word count. We need high-quality content for a 2-minute podcast.` }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
@@ -391,6 +394,7 @@ serve(async (req) => {
 
     // Check for cached edition (SKIP if forceRefresh is true)
     if (!forceRefresh) {
+      console.log('Checking for cached edition for:', { editionType, region, language, today });
       const { data: cachedEdition } = await supabaseClient
         .from('daily_editions')
         .select('*')
@@ -402,7 +406,7 @@ serve(async (req) => {
         .single();
 
       if (cachedEdition) {
-        console.log('Returning cached edition');
+        console.log('✅ Returning cached edition');
 
         // Still increment usage for cached editions
         await supabaseClient.rpc('increment_daily_usage', {
@@ -426,7 +430,7 @@ serve(async (req) => {
         );
       }
     } else {
-      console.log('Force refresh requested - skipping cache');
+      console.log('🚀 FORCE REFRESH REQUESTED: Bypassing Supabase cache and generating fresh content');
     }
 
     console.log('Generating new edition...');
@@ -458,30 +462,31 @@ serve(async (req) => {
       ?.trim()
       ?.slice(0, 100) || 'Daily News Briefing';
 
-    // Step 2: Run lightweight + medium tasks in parallel
-    console.log('Starting parallel generation (summary, script, image)...');
-    const [summaryResult, scriptResult, imageResult] = await Promise.allSettled([
-      gemini.generateFlashSummary(trendingNews, language),
-      gemini.generatePodcastScript(trendingNews, language, '1 minute'),
-      withTimeout(gemini.generateCoverArt(firstTopic), 30000, null), // 30s timeout
-    ]);
+    // Step 2-4: Sequential to smooth out resource spikes (Image, Summary, Script)
+    console.log('Step 2: Generating flash summary...');
+    let flashSummary = '';
+    try {
+      flashSummary = await gemini.generateFlashSummary(trendingNews, language);
+    } catch (e) { console.error('Summary error:', e); }
 
-    // Extract results with fallbacks
-    const flashSummary = summaryResult.status === 'fulfilled' ? summaryResult.value : '';
-    const script = scriptResult.status === 'fulfilled' ? scriptResult.value : '';
-    const imageUrl = imageResult.status === 'fulfilled' ? imageResult.value : null;
+    console.log('Step 3: Generating cover art...');
+    let imageUrl = null;
+    try {
+      imageUrl = await withTimeout(gemini.generateCoverArt(firstTopic), 30000, null);
+    } catch (e) { console.error('Image error:', e); }
 
-    console.log('Parallel generation complete:');
+    console.log('Step 4: Generating podcast script...');
+    let script = '';
+    try {
+      script = await gemini.generatePodcastScript(trendingNews, language, '1 minute');
+    } catch (e) { console.error('Script error:', e); }
+
+    console.log('Sequential generation complete:');
     console.log('  - Summary:', flashSummary ? 'success' : 'failed');
-    console.log('  - Script:', script ? `success (${script.length} chars)` : 'failed');
     console.log('  - Image:', imageUrl ? 'success' : 'failed/skipped');
+    console.log('  - Script:', script ? `success (${script.length} chars)` : 'failed');
 
-    // Log any errors for debugging
-    if (summaryResult.status === 'rejected') console.error('Summary error:', summaryResult.reason);
-    if (scriptResult.status === 'rejected') console.error('Script error:', scriptResult.reason);
-    if (imageResult.status === 'rejected') console.error('Image error:', imageResult.reason);
-
-    // Step 3: Generate audio (requires script, run last)
+    // Step 5: Generate audio (requires script, run last)
     let audioUrl: string | null = null;
     let audioError: string | undefined;
 
