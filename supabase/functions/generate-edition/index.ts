@@ -234,7 +234,7 @@ class GeminiService {
     try {
       console.log('Generating cover art with Imagen for topic:', topic);
       const response = await this.ai.models.generateImages({
-        model: 'imagen-3.0-fast-generate-001',
+        model: 'imagen-3.0-generate-001',
         prompt: `Professional podcast cover art for news topic: "${topic}". Modern, sleek, dark theme with purple accents. High quality, abstract visualization.`,
         config: {
           numberOfImages: 1,
@@ -251,14 +251,15 @@ class GeminiService {
       // but according to SDK it should be a base64 string.
       if (typeof imageBytes !== 'string') {
         console.log('imageBytes is not a string, type:', typeof imageBytes);
-        // Fallback for safety
         return null;
       }
 
       // Sanitize base64 (remove any potential whitespace or newlines)
       const cleanBase64 = imageBytes.replace(/[\n\r\t\s]/g, '');
-      console.log('Cover art generated successfully, base64 length:', cleanBase64.length);
-      return `data:image/png;base64,${cleanBase64}`;
+      const dataUri = `data:image/png;base64,${cleanBase64}`;
+      console.log('Cover art generated successfully, URI length:', dataUri.length);
+      console.log('URI Start:', dataUri.substring(0, 50));
+      return dataUri;
     } catch (error: any) {
       console.error('Imagen Error:', error);
       return null;
