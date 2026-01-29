@@ -9,11 +9,11 @@ export class BackendService {
   private async callFunction(name: string, body: any) {
     console.log('🔍 [Backend] Getting session...');
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     console.log('🔍 [Backend] Session:', session ? 'EXISTS' : 'NULL');
     console.log('🔍 [Backend] User:', session?.user?.email);
     console.log('🔍 [Backend] Access token:', session?.access_token ? 'EXISTS' : 'MISSING');
-    
+
     if (!session) {
       console.error('❌ [Backend] No session - user not authenticated');
       throw new Error('Not authenticated');
@@ -48,10 +48,9 @@ export class BackendService {
         throw error;
       }
 
-      if (response.status === 403 && data.upgrade) {
-        // Feature not allowed on plan
-        const error = new Error(data.message || 'Upgrade required');
-        (error as any).upgrade = true;
+      if (response.status === 546 || data.code === 'WORKER_LIMIT') {
+        const error = new Error('The server is currently processing too many requests. Please try again in 30 seconds.');
+        (error as any).workerLimit = true;
         throw error;
       }
 
@@ -67,12 +66,14 @@ export class BackendService {
   async generateEdition(
     editionType: 'Morning' | 'Midday' | 'Evening',
     region: string,
-    language: string
+    language: string,
+    forceRefresh: boolean = false
   ) {
     return this.callFunction('generate-edition', {
       editionType,
       region,
       language,
+      forceRefresh,
     });
   }
 
