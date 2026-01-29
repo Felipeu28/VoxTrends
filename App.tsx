@@ -30,8 +30,21 @@ interface DailyData {
 // Convert base64 audio to blob URL for playback
 const createAudioBlobUrl = (base64Audio: string): string => {
   try {
-    // Strip "data:audio/..." prefix if present to get raw base64
-    const base64 = base64Audio.includes(',') ? base64Audio.split(',')[1] : base64Audio;
+    // Detect MIME type from data URL prefix, default to wav
+    let mimeType = 'audio/wav';
+    let base64 = base64Audio;
+
+    if (base64Audio.includes(',')) {
+      const parts = base64Audio.split(',');
+      const prefix = parts[0];
+      base64 = parts[1];
+
+      // Extract MIME type from prefix like "data:audio/wav;base64"
+      const mimeMatch = prefix.match(/data:([^;]+)/);
+      if (mimeMatch) {
+        mimeType = mimeMatch[1];
+      }
+    }
 
     // Decode base64
     const binaryString = atob(base64.replace(/[\n\r\t\s]/g, ''));
@@ -40,8 +53,8 @@ const createAudioBlobUrl = (base64Audio: string): string => {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    // Create Blob directly from audio bytes (MP3)
-    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+    // Create Blob with detected MIME type
+    const blob = new Blob([bytes], { type: mimeType });
     return URL.createObjectURL(blob);
   } catch (error) {
     console.error('Failed to create audio blob:', error);
@@ -1301,10 +1314,10 @@ const App: React.FC = () => {
                     <div className="animate-in slide-in-from-top duration-700">
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
                         <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
-                          ðŸŒ {region}
+                          🌎 {region}
                         </span>
                         <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
-                          ðŸ—£ï¸ {language}
+                          🗣️ {language}
                         </span>
                         {editionVariants > 1 && (
                           <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold text-zinc-500">
@@ -1326,14 +1339,14 @@ const App: React.FC = () => {
                               onClick={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
                               className="px-8 py-3 bg-emerald-600 border border-emerald-700 rounded-xl text-sm font-black tracking-wide text-white hover:bg-emerald-700 transition-all shadow-lg"
                             >
-                              ðŸ’¾ SAVE
+                              💾 SAVE
                             </button>
                             <button
                               onClick={() => handleGenerateDaily(activeTab, true)}
                               disabled={loading}
                               className="px-8 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold tracking-wide text-violet-400 hover:border-violet-600 transition-all disabled:opacity-50"
                             >
-                              ðŸ”„ Regenerate
+                              🔄 Regenerate
                             </button>
                           </div>
 
