@@ -401,38 +401,60 @@ serve(async (req) => {
     // Initialize Gemini service
     const gemini = new GeminiService(Deno.env.get('GEMINI_API_KEY') ?? '');
 
-    // Step 1: Fetch trending news
+    // Step 1: Fetch trending news (REQUIRED)
     console.log('Fetching trending news...');
     const { text: trendingNews, grounding: groundingLinks } = await gemini.fetchTrendingNews(region, language);
     console.log('Trending news fetched');
 
-    // Start independent tasks in parallel to save time
-    const firstTopic = trendingNews.split('\n')[0] || 'Daily News';
+    // Step 2: Generate flash summary (lightweight, do first)
+    console.log('Generating flash summary...');
+    let flashSummary = '';
+    try {
+      flashSummary = await gemini.generateFlashSummary(trendingNews, language);
+      console.log('Flash summary generated');
+    } catch (e) {
+      console.error('Flash summary failed (non-critical):', e);
+    }
 
-    // Launch parallel tasks
-    const coverArtPromise = gemini.generateCoverArt(firstTopic);
-    const flashSummaryPromise = gemini.generateFlashSummary(trendingNews, language);
-    const scriptPromise = gemini.generatePodcastScript(trendingNews, language, '2 minutes');
-
-    // Step 2: Generate podcast script (awaited for Audio)
+    // Step 3: Generate podcast script (shorter = less TTS load)
     console.log('Generating podcast script...');
-    const script = await scriptPromise;
-    console.log('Script generated');
+    let script = '';
+    try {
+      script = await gemini.generatePodcastScript(trendingNews, language, '30 seconds');
+      console.log('Script generated');
+    } catch (e) {
+      console.error('Script generation failed (non-critical):', e);
+    }
 
-    // Step 3: Generate audio (TTS)
-    // We await script first, but coverArt and flashSummary continue in background
-    console.log('Generating audio...');
-    const { data: audioBase64, error: audioError } = await gemini.generateAudio(script || '');
+    // Step 4: Generate audio (OPTIONAL - graceful degradation)
+    let audioUrl: string | null = null;
+    let audioError: string | undefined;
+    if (script) {
+      console.log('Generating audio...');
+      try {
+        const audioResult = await gemini.generateAudio(script);
+        audioUrl = audioResult.data ? `data:audio/wav;base64,${audioResult.data}` : null;
+        audioError = audioResult.error;
+        console.log('Audio generated:', audioUrl ? 'success' : 'failed', audioError ? `Error: ${audioError}` : '');
+      } catch (e: any) {
+        console.error('Audio generation failed (non-critical):', e);
+        audioError = e.message;
+      }
+    }
 
-    // Construct Data URL only if needed and successful
-    const audioUrl = audioBase64 ? `data:audio/wav;base64,${audioBase64}` : null;
-    console.log('Audio generated:', audioUrl ? 'success' : 'failed', audioError ? `Error: ${audioError}` : '');
-
-    // Await the other promises
-    console.log('Waiting for cover art and summary...');
-    // Step 4 & 5 result collection
-    const [imageUrl, flashSummary] = await Promise.all([coverArtPromise, flashSummaryPromise]);
-    console.log('Cover art and Flash summary ready');
+    // Step 5: Generate cover art (OPTIONAL - skip to save resources)
+    // Commenting out image generation to reduce resource usage
+    const imageUrl: string | null = null;
+    console.log('Skipping cover art generation to save resources');
+    /*
+    const firstTopic = trendingNews.split('\n')[0] || 'Daily News';
+    try {
+      imageUrl = await gemini.generateCoverArt(firstTopic);
+      console.log('Cover art generated:', imageUrl ? 'success' : 'skipped');
+    } catch (e) {
+      console.error('Cover art failed (non-critical):', e);
+    }
+    */
 
     // Cache the edition
     const expiresAt = new Date();
