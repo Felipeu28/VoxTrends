@@ -887,8 +887,12 @@ const App: React.FC = () => {
         date: todayStr // Save today's date
       };
 
-      setDailyEditions(prev => ({ ...prev, [editionKey]: newData }));
-      await voxDB.set(VOX_EDITIONS_KEY, { ...dailyEditions, [editionKey]: newData });
+      setDailyEditions(prev => {
+        const updated = { ...prev, [editionKey]: newData };
+        // Sync with Local DB inside the functional update to ensure we use the freshest state
+        voxDB.set(VOX_EDITIONS_KEY, updated).catch(e => console.error('Local DB Sync Error:', e));
+        return updated;
+      });
 
       setToastMessage(`🎉 ${ed} edition ready!`);
       setQuotaRefreshTrigger(prev => prev + 1); // Refresh quota display
