@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai';
+import { GoogleGenAI } from 'https://esm.sh/@google/genai';
 
 // ==================== CORS ====================
 const corsHeaders = {
@@ -48,36 +48,84 @@ function getPlanLimits(plan: string) {
 }
 
 // ==================== GEMINI SERVICE ====================
+
+// Helper: Create WAV header for PCM audio (24kHz, 16-bit, mono)
+function createWavHeader(pcmLength: number): Uint8Array {
+  const sampleRate = 24000;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmLength;
+  const fileSize = 36 + dataSize;
+
+  const buffer = new ArrayBuffer(44);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, fileSize, true);
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+
+  // fmt chunk
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true); // chunk size
+  view.setUint16(20, 1, true); // audio format (PCM)
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+
+  // data chunk
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, dataSize, true);
+
+  return new Uint8Array(buffer);
+}
+
+// Helper: Convert base64 PCM to base64 WAV
+function pcmToWav(pcmBase64: string): string {
+  const pcmBytes = Uint8Array.from(atob(pcmBase64), c => c.charCodeAt(0));
+  const wavHeader = createWavHeader(pcmBytes.length);
+  const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
+  wavBytes.set(wavHeader, 0);
+  wavBytes.set(pcmBytes, wavHeader.length);
+
+  // Convert to base64
+  let binary = '';
+  for (let i = 0; i < wavBytes.length; i++) {
+    binary += String.fromCharCode(wavBytes[i]);
+  }
+  return btoa(binary);
+}
+
 class GeminiService {
-  private genAI: GoogleGenerativeAI;
+  private ai: GoogleGenAI;
   private apiKey: string;
 
   constructor(apiKey: string) {
-    this.genAI = new GoogleGenerativeAI(apiKey);
+    this.ai = new GoogleGenAI({ apiKey });
     this.apiKey = apiKey;
   }
 
   async fetchTrendingNews(region: string, language: string) {
     try {
-      // Use gemini-3-flash-preview for high-speed trend extraction
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-3-flash-preview',
-        tools: [{ googleSearch: {} }],
-      });
-
-      const result = await model.generateContent({
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
             text: `Research the top 5 trending news topics on X (Twitter) for: ${region}.
         Focus on real-time social velocity. Language: ${language}.
         Provide verified facts and specific details for a podcast summary.
         Do not use emojis or markdown bolding in the output.` }]
-        }]
+        }],
+        config: {
+          tools: [{ googleSearch: {} }],
+        }
       });
 
-      const response = result.response;
-      const text = response.text().replace(/[*#]/g, '');
-
+      const text = response.text?.replace(/[*#]/g, '') || '';
       const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
         uri: chunk.web?.uri,
         title: chunk.web?.title,
@@ -92,9 +140,8 @@ class GeminiService {
 
   async generatePodcastScript(trends: string, language: string, duration: string = '1 minute') {
     try {
-      // Use gemini-3-pro-preview for creative showrunning
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-3-pro-preview' });
-      const result = await model.generateContent({
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
             text: `Showrunner: 'VoxTrends'. Create a ${duration} podcast briefing for these trends: ${trends}.
@@ -111,9 +158,11 @@ class GeminiService {
 
         Output only the script text. Do not use emojis.` }]
         }],
-        generationConfig: { temperature: 0.8 },
+        config: {
+          generationConfig: { temperature: 0.8 },
+        }
       });
-      return result.response.text();
+      return response.text || '';
     } catch (error) {
       console.error('Script Gen Error:', error);
       throw error;
@@ -122,16 +171,13 @@ class GeminiService {
 
   async generateAudio(script: string): Promise<{ data: string | null; error?: string }> {
     try {
-      // Use Native TTS with gemini-2.5-flash-preview-tts
-      // Note: Native TTS returns raw PCM audio, not MP3.
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-tts' });
-
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: script }] }],
-        generationConfig: {
+      console.log('Starting TTS generation...');
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash-preview-tts',
+        contents: [{ parts: [{ text: script }] }],
+        config: {
           responseModalities: ['AUDIO'],
           speechConfig: {
-            audioEncoding: "MP3",
             multiSpeakerVoiceConfig: {
               speakerVoiceConfigs: [
                 { speaker: 'Joe', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
@@ -142,38 +188,58 @@ class GeminiService {
         }
       });
 
-      const response = result.response;
-      // Native audio comes in inlineData
-      // candidates[0].content.parts[0].inlineData.data (base64)
-      const audioPart = response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-      const audioContent = audioPart?.inlineData?.data;
+      // Extract PCM audio from response
+      const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
-      if (!audioContent) {
+      if (!audioData) {
         console.error('Gemini TTS returned empty audioContent');
         return { data: null, error: 'Gemini TTS returned empty audioContent' };
       }
 
-      return { data: audioContent };
+      console.log('TTS returned audio data, converting PCM to WAV...');
+      // Convert PCM to WAV for browser playback
+      const wavBase64 = pcmToWav(audioData);
+      console.log('WAV conversion complete');
+
+      return { data: wavBase64 };
     } catch (error: any) {
       console.error('Gemini TTS Synthesis Error:', error);
       return { data: null, error: `Synthesis Error: ${error.message}` };
     }
   }
 
+  async generateCoverArt(topic: string): Promise<string | null> {
+    try {
+      console.log('Generating cover art with Imagen...');
+      const response = await this.ai.models.generateImages({
+        model: 'imagen-3.0-generate-002',
+        prompt: `Professional podcast cover art for news topic: "${topic}". Modern, sleek, dark theme with purple accents. High quality, abstract visualization.`,
+        config: {
+          numberOfImages: 1,
+        }
+      });
 
-  async generateCoverArt(topic: string) {
-    // For now, return null as Imagen generation via new SDK or standard SDK requires specific setup.
-    // Focusing on fixing the Intelligence feed first.
-    return null;
+      const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+      if (!imageBytes) {
+        console.error('Imagen returned no image');
+        return null;
+      }
+
+      console.log('Cover art generated successfully');
+      return `data:image/png;base64,${imageBytes}`;
+    } catch (error: any) {
+      console.error('Imagen Error:', error);
+      return null;
+    }
   }
 
   async generateFlashSummary(text: string, language: string) {
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite-preview-02-05' });
-      const result = await model.generateContent({
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.0-flash',
         contents: [{ role: 'user', parts: [{ text: `3 punchy bullet points summary of: ${text}. Language: ${language}. Do not use emojis.` }] }]
       });
-      return result.response.text();
+      return response.text || '';
     } catch (error) {
       console.error('Summary Gen Error:', error);
       return '';
@@ -359,7 +425,7 @@ serve(async (req) => {
     const { data: audioBase64, error: audioError } = await gemini.generateAudio(script || '');
 
     // Construct Data URL only if needed and successful
-    const audioUrl = audioBase64 ? `data:audio/mpeg;base64,${audioBase64}` : null;
+    const audioUrl = audioBase64 ? `data:audio/wav;base64,${audioBase64}` : null;
     console.log('Audio generated:', audioUrl ? 'success' : 'failed', audioError ? `Error: ${audioError}` : '');
 
     // Await the other promises
