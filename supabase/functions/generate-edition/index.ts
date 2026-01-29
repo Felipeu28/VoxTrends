@@ -339,27 +339,33 @@ serve(async (req) => {
     const { text: trendingNews, grounding: groundingLinks } = await gemini.fetchTrendingNews(region, language);
     console.log('Trending news fetched');
 
-    // Step 2: Generate podcast script
+    // Start independent tasks in parallel to save time
+    const firstTopic = trendingNews.split('\n')[0] || 'Daily News';
+
+    // Launch parallel tasks
+    const coverArtPromise = gemini.generateCoverArt(firstTopic);
+    const flashSummaryPromise = gemini.generateFlashSummary(trendingNews, language);
+    const scriptPromise = gemini.generatePodcastScript(trendingNews, language, '2 minutes');
+
+    // Step 2: Generate podcast script (awaited for Audio)
     console.log('Generating podcast script...');
-    const script = await gemini.generatePodcastScript(trendingNews, language, '2 minutes');
+    const script = await scriptPromise;
     console.log('Script generated');
 
     // Step 3: Generate audio (TTS)
+    // We await script first, but coverArt and flashSummary continue in background
     console.log('Generating audio...');
     const { data: audioBase64, error: audioError } = await gemini.generateAudio(script || '');
+
+    // Construct Data URL only if needed and successful
     const audioUrl = audioBase64 ? `data:audio/mpeg;base64,${audioBase64}` : null;
     console.log('Audio generated:', audioUrl ? 'success' : 'failed', audioError ? `Error: ${audioError}` : '');
 
-    // Step 4: Generate cover art
-    console.log('Generating cover art...');
-    const firstTopic = trendingNews.split('\n')[0] || 'Daily News';
-    const imageUrl = await gemini.generateCoverArt(firstTopic);
-    console.log('Cover art generated:', imageUrl ? 'success' : 'failed');
-
-    // Step 5: Generate flash summary
-    console.log('Generating flash summary...');
-    const flashSummary = await gemini.generateFlashSummary(trendingNews, language);
-    console.log('Flash summary generated');
+    // Await the other promises
+    console.log('Waiting for cover art and summary...');
+    // Step 4 & 5 result collection
+    const [imageUrl, flashSummary] = await Promise.all([coverArtPromise, flashSummaryPromise]);
+    console.log('Cover art and Flash summary ready');
 
     // Cache the edition
     const expiresAt = new Date();
