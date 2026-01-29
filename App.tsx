@@ -907,6 +907,11 @@ const App: React.FC = () => {
         return;
       }
 
+      if (error.workerLimit) {
+        setToastMessage(`⚡ Server is busy. Please wait a few seconds and try again.`);
+        return;
+      }
+
       setToastMessage(error.message || 'Failed to generate edition. Please try again.');
     } finally {
       setLoading(false);
