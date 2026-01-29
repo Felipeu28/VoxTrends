@@ -855,7 +855,7 @@ const App: React.FC = () => {
 
     try {
       // ✅ NOW USING BACKEND FUNCTION THAT CHECKS LIMITS!
-      const result = await backend.generateEdition(ed, region, language);
+      const result = await backend.generateEdition(ed, region, language, forceRefresh);
 
       if (result.cached) {
         setStatus('Loading cached edition...');
@@ -1122,14 +1122,16 @@ const App: React.FC = () => {
                     }
                     setShowMobileSettings(false);
                   }}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold focus:outline-none appearance-none cursor-pointer"
+                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
                 >
-                  <option value="Global">Global</option>
-                  <option value="USA">United States</option>
-                  <option value="Colombia">Colombia</option>
-                  <option value="Mexico">Mexico</option>
-                  <option value="Spain">Spain</option>
-                  <option value="Venezuela">Venezuela</option>
+                  <option value="Global">Global 🌎</option>
+                  <option value="USA">USA 🇺🇸</option>
+                  <option value="UK">UK 🇬🇧</option>
+                  <option value="Colombia">Colombia 🇨🇴</option>
+                  <option value="Brazil">Brazil 🇧🇷</option>
+                  <option value="Mexico">Mexico 🇲🇽</option>
+                  <option value="Argentina">Argentina 🇦🇷</option>
+                  <option value="Spain">Spain 🇪🇸</option>
                 </select>
               </div>
               <div className="space-y-3">
@@ -1143,10 +1145,11 @@ const App: React.FC = () => {
                     }
                     setShowMobileSettings(false);
                   }}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold focus:outline-none appearance-none cursor-pointer"
+                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
                 >
-                  <option value="English">English</option>
-                  <option value="Spanish">Spanish</option>
+                  <option value="English">English 🇬🇧</option>
+                  <option value="Spanish">Spanish 🇪🇸</option>
+                  <option value="Portuguese">Portuguese 🇧🇷</option>
                 </select>
               </div>
             </div>
@@ -1228,18 +1231,22 @@ const App: React.FC = () => {
                   db.updateUser(authUser.id, { region: e.target.value });
                 }
               }}
-              className="w-full bg-transparent text-xs font-bold focus:outline-none appearance-none cursor-pointer"
+              className="px-4 py-2.5 bg-black border border-zinc-800 rounded-xl text-sm font-bold text-zinc-300 focus:border-violet-600 focus:ring-1 focus:ring-violet-600 outline-none hover:border-zinc-700 transition-all appearance-none cursor-pointer"
+              style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
             >
-              <option value="Global">Global</option>
-              <option value="USA">United States</option>
-              <option value="Colombia">Colombia</option>
-              <option value="Mexico">Mexico</option>
-              <option value="Spain">Spain</option>
-              <option value="Venezuela">Venezuela</option>
+              <option value="Global">Global 🌎</option>
+              <option value="USA">USA 🇺🇸</option>
+              <option value="UK">UK 🇬🇧</option>
+              <option value="Colombia">Colombia 🇨🇴</option>
+              <option value="Brazil">Brazil 🇧🇷</option>
+              <option value="Mexico">Mexico 🇲🇽</option>
+              <option value="Argentina">Argentina 🇦🇷</option>
+              <option value="Spain">Spain 🇪🇸</option>
             </select>
           </div>
-          <div className="space-y-1">
-            <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">{t.language}</label>
+
+          <div className="flex flex-col gap-1.5 min-w-[140px]">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Language</label>
             <select
               value={language}
               onChange={(e) => {
@@ -1248,10 +1255,12 @@ const App: React.FC = () => {
                   db.updateUser(authUser.id, { language: e.target.value });
                 }
               }}
-              className="w-full bg-transparent text-xs font-bold focus:outline-none appearance-none cursor-pointer"
+              className="px-4 py-2.5 bg-black border border-zinc-800 rounded-xl text-sm font-bold text-zinc-300 focus:border-violet-600 focus:ring-1 focus:ring-violet-600 outline-none hover:border-zinc-700 transition-all appearance-none cursor-pointer"
+              style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
             >
-              <option value="English">English</option>
-              <option value="Spanish">Spanish</option>
+              <option value="English">English 🇬🇧</option>
+              <option value="Spanish">Spanish 🇪🇸</option>
+              <option value="Portuguese">Portuguese 🇧🇷</option>
             </select>
           </div>
         </div>
@@ -1687,31 +1696,33 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      </main>
+      </main >
 
       {/* Floating Audio Player - OUTSIDE main, INSIDE root */}
-      {playingClipId && (
-        <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse">
-              <ICONS.Podcast className="w-6 h-6 text-white" />
+      {
+        playingClipId && (
+          <div className="fixed bottom-20 md:bottom-8 right-4 left-4 md:left-auto md:right-8 z-[150] md:w-80 bg-zinc-950 border border-violet-600/30 p-4 rounded-3xl shadow-2xl animate-in slide-in-from-right">
+            <div className="flex items-center gap-4 mb-3">
+              <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center animate-pulse">
+                <ICONS.Podcast className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="text-[10px] font-black text-violet-500 uppercase">On Air</p>
+                <p className="text-xs font-bold truncate">Broadcast Intelligence</p>
+              </div>
+              <button
+                onClick={() => setPlayingClipId(null)}
+                className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white"
+              >
+                <ICONS.Pause className="w-4 h-4" />
+              </button>
             </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-[10px] font-black text-violet-500 uppercase">On Air</p>
-              <p className="text-xs font-bold truncate">Broadcast Intelligence</p>
-            </div>
-            <button
-              onClick={() => setPlayingClipId(null)}
-              className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white"
-            >
-              <ICONS.Pause className="w-4 h-4" />
-            </button>
+            <AudioVisualizer isPlaying={true} />
           </div>
-          <AudioVisualizer isPlaying={true} />
-        </div>
-      )}
+        )
+      }
 
-    </div>
+    </div >
   );
 };
 
