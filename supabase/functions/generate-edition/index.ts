@@ -122,14 +122,13 @@ class GeminiService {
         For EACH of the top 5 topics, you MUST provide a comprehensive and detailed report.
         
         CRITICAL CONSTRAINTS:
-        - NEVER use bullet points or numbered lists.
+        - NEVER use numbered lists.
         - Use LONG paragraphs with deep context and analysis.
-        - EACH topic MUST have at least 300 words of detailed information.
-        - Include specific data, names, background history, and different societal perspectives.
         - Describe why it is trending and the atmosphere of the social conversation.
+        - Include specific data, names, background history, and different societal perspectives.
         
         Format the output as a high-quality journalistic deep-dive in ${language}.
-        DO NOT use any markdown formatting (like *, #, or bolding).
+        You MAY use simple markdown like headers (#) and bolding (**) for readability.
         DO NOT use emojis.
         Be extremely verbose. We need high-quality content for a 2-minute podcast.` }]
         }],
@@ -138,12 +137,13 @@ class GeminiService {
         }
       });
 
-      // Extract text safely
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text?.replace(/[*#]/g, '') || '';
+      // SDK native response.text() is robust when tools are used
+      const text = response.text || '';
       console.log(`Fetched news briefing, length: ${text.length} characters`);
-
-      // If the model still returned bullet points or is too short, we can't easily fix it here, 
-      // but the prompt is now extremely strong.
+      if (!text) {
+        console.warn('Gemini returned empty text for news briefing.');
+        return { text: `Trending News Briefing for ${region}: [Content generation failed or returned empty]`, grounding: [] };
+      }
 
       const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
         uri: chunk.web?.uri,
@@ -229,23 +229,33 @@ class GeminiService {
 
   async generateCoverArt(topic: string): Promise<string | null> {
     try {
-      console.log('Generating cover art with Imagen...');
+      console.log('Generating cover art with Imagen for topic:', topic);
       const response = await this.ai.models.generateImages({
-        model: 'imagen-3.0-generate-001',
+        model: 'imagen-3.0-fast-generate-001',
         prompt: `Professional podcast cover art for news topic: "${topic}". Modern, sleek, dark theme with purple accents. High quality, abstract visualization.`,
         config: {
           numberOfImages: 1,
         }
       });
 
-      const imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+      let imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
       if (!imageBytes) {
-        console.error('Imagen returned no image');
+        console.error('Imagen returned no image in response');
         return null;
       }
 
-      console.log('Cover art generated successfully');
-      return `data:image/png;base64,${imageBytes}`;
+      // If it's not a string (e.g. Uint8Array), conversion might be needed, 
+      // but according to SDK it should be a base64 string.
+      if (typeof imageBytes !== 'string') {
+        console.log('imageBytes is not a string, type:', typeof imageBytes);
+        // Fallback for safety
+        return null;
+      }
+
+      // Sanitize base64 (remove any potential whitespace or newlines)
+      const cleanBase64 = imageBytes.replace(/[\n\r\t\s]/g, '');
+      console.log('Cover art generated successfully, base64 length:', cleanBase64.length);
+      return `data:image/png;base64,${cleanBase64}`;
     } catch (error: any) {
       console.error('Imagen Error:', error);
       return null;
@@ -441,8 +451,12 @@ serve(async (req) => {
       throw new Error('Failed to fetch trending news content');
     }
 
-    // Extract first topic for image generation
-    const firstTopic = trendingNews.split('\n')[0]?.slice(0, 100) || 'Daily News Briefing';
+    // Extract first topic for image generation (clean it for better prompt)
+    const firstTopic = trendingNews.split('\n')
+      .find(line => line.trim().length > 5)
+      ?.replace(/[*#]/g, '')
+      ?.trim()
+      ?.slice(0, 100) || 'Daily News Briefing';
 
     // Step 2: Run lightweight + medium tasks in parallel
     console.log('Starting parallel generation (summary, script, image)...');
