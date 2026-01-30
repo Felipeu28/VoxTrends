@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenAI } from 'https://esm.sh/@google/genai';
+import { GoogleGenAI } from 'https://esm.sh/@google/genai@1.38.0';
 
 // ==================== CORS ====================
 const corsHeaders = {
@@ -112,28 +112,47 @@ class GeminiService {
     this.apiKey = apiKey;
   }
 
-  async fetchTrendingNews(region: string, language: string) {
+  async fetchTrendingNews(region: string, language: string, editionType: string = 'Daily') {
     try {
-      console.log(`Generating detailed news briefing for ${region} in ${language}...`);
+      let timeFocus = "the last 24 hours";
+      let thematicFocus = "";
+
+      if (editionType === 'Morning') {
+        timeFocus = "overnight and the very start of today";
+        thematicFocus = "Focus on what happened while the region was sleeping and the key stories setting the agenda for today.";
+      } else if (editionType === 'Midday') {
+        timeFocus = "this morning and unfolding live events";
+        thematicFocus = "Focus on how stories have developed since the morning and live breaking news from the last few hours.";
+      } else if (editionType === 'Evening') {
+        timeFocus = "the full day's cycle and closing events";
+        thematicFocus = "Focus on the final outcomes of today's big stories and what is trending as the day comes to a close.";
+      }
+
+      console.log(`Generating detailed ${editionType} news briefing for ${region} in ${language}...`);
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
-            text: `You are an expert news analyst and investigative journalist. 
-        Research the top 5 trending news topics on X (Twitter) and social media in ${region} right now.
+            text: `[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
+        
+        You are an expert news analyst and investigative journalist. 
+        Research the top 5 most significant news topics and trending stories from ${timeFocus} in ${region}.
+        ${thematicFocus}
         
         For EACH of the top 5 topics, you MUST provide a comprehensive and detailed report.
         
         CRITICAL CONSTRAINTS:
         - NEVER use numbered lists.
-        - Use 3-4 LONG paragraphs with deep context and analysis.
+        - Use 3-4 LONG paragraphs with deep context and analysis for EACH topic.
         - Describe why it is trending and the atmosphere of the social conversation.
         - Include specific data, names, background history, and different societal perspectives.
+        - DO NOT include ANY introductory text, acknowledging filler, or meta-talk (e.g., "Okay, I will investigate...", "Based on my research...", "Here are the top stories...").
+        - START DIRECTLY with the first news report.
         
         Format the output as a high-quality journalistic deep-dive in ${language}.
         You MAY use simple markdown like headers (#) and bolding (**) for readability.
         DO NOT use emojis.
-        Be extremely informative. Focus on qualitative density rather than just word count. We need high-quality content for a 2-minute podcast.` }]
+        Be extremely informative. Focus on qualitative density. We need high-quality content for a 2-minute podcast.` }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
@@ -184,6 +203,7 @@ class GeminiService {
           generationConfig: { temperature: 0.8 },
         }
       });
+      // Corrected to use response.text for this specific SDK version
       return response.text || '';
     } catch (error) {
       console.error('Script Gen Error:', error);
@@ -232,33 +252,47 @@ class GeminiService {
 
   async generateCoverArt(topic: string): Promise<string | null> {
     try {
-      console.log('Generating cover art with Imagen for topic:', topic);
+      console.log('Generating cover art with Imagen 4.0 for topic:', topic);
       const response = await this.ai.models.generateImages({
-        model: 'imagen-3.0-generate-001',
+        model: 'imagen-4.0-generate-001',
         prompt: `Professional podcast cover art for news topic: "${topic}". Modern, sleek, dark theme with purple accents. High quality, abstract visualization.`,
         config: {
           numberOfImages: 1,
         }
       });
 
-      let imageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+      console.log('Imagen Response received:', JSON.stringify(response).substring(0, 200));
+
+      const image = response.generatedImages?.[0]?.image;
+      const imageBytes = image?.imageBytes;
+
       if (!imageBytes) {
-        console.error('Imagen returned no image in response');
+        console.error('Imagen returned no image bytes in response');
         return null;
       }
 
-      // If it's not a string (e.g. Uint8Array), conversion might be needed, 
-      // but according to SDK it should be a base64 string.
-      if (typeof imageBytes !== 'string') {
-        console.log('imageBytes is not a string, type:', typeof imageBytes);
-        return null;
+      // In Deno/Supabase, imageBytes can be a string (base64) or binary data (Uint8Array)
+      let cleanBase64 = '';
+      if (typeof imageBytes === 'string') {
+        cleanBase64 = imageBytes.replace(/[\n\r\t\s]/g, '');
+      } else {
+        console.log('imageBytes returned as binary, converting to base64...');
+        try {
+          const bytes = new Uint8Array(imageBytes as any);
+          const chunks: string[] = [];
+          for (let i = 0; i < bytes.length; i += 0x8000) {
+            // @ts-ignore
+            chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)));
+          }
+          cleanBase64 = btoa(chunks.join(''));
+        } catch (e) {
+          console.error('Binary image conversion failed:', e);
+          return null;
+        }
       }
 
-      // Sanitize base64 (remove any potential whitespace or newlines)
-      const cleanBase64 = imageBytes.replace(/[\n\r\t\s]/g, '');
       const dataUri = `data:image/png;base64,${cleanBase64}`;
       console.log('Cover art generated successfully, URI length:', dataUri.length);
-      console.log('URI Start:', dataUri.substring(0, 50));
       return dataUri;
     } catch (error: any) {
       console.error('Imagen Error:', error);
@@ -449,7 +483,7 @@ serve(async (req) => {
 
     // Step 1: Fetch trending news (REQUIRED - this is the core content)
     console.log('Fetching trending news...');
-    const { text: trendingNews, grounding: groundingLinks } = await gemini.fetchTrendingNews(region, language);
+    const { text: trendingNews, grounding: groundingLinks } = await gemini.fetchTrendingNews(region, language, editionType);
     console.log('Trending news fetched, length:', trendingNews.length);
 
     if (!trendingNews || trendingNews.length < 50) {
