@@ -744,6 +744,7 @@ const App: React.FC = () => {
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
   const [quotaRefreshTrigger, setQuotaRefreshTrigger] = useState(0);
+  const [selectedVoiceId, setSelectedVoiceId] = useState('originals');
 
   const t = translations[language as keyof typeof translations] || translations.English;
 
@@ -866,7 +867,7 @@ const App: React.FC = () => {
 
     try {
       // ✅ NOW USING BACKEND FUNCTION THAT CHECKS LIMITS!
-      const result = await backend.generateEdition(ed, region, language, forceRefresh);
+      const result = await backend.generateEdition(ed, region, language, forceRefresh, selectedVoiceId);
 
       if (result.cached) {
         setStatus('Loading cached edition...');
@@ -1172,6 +1173,21 @@ const App: React.FC = () => {
                   <option value="Portuguese">Portuguese 🇧🇷</option>
                 </select>
               </div>
+              <div className="space-y-3">
+                <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">Voice Profile</label>
+                <select
+                  value={selectedVoiceId}
+                  onChange={(e) => {
+                    setSelectedVoiceId(e.target.value);
+                    setShowMobileSettings(false);
+                  }}
+                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
+                >
+                  <option value="originals">The Originals (Joe & Jane)</option>
+                  <option value="deep-divers">The Deep-Divers (David & Sarah)</option>
+                  <option value="trendspotters">The Trendspotters (Leo & Maya)</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -1281,6 +1297,20 @@ const App: React.FC = () => {
               <option value="English">English 🇬🇧</option>
               <option value="Spanish">Spanish 🇪🇸</option>
               <option value="Portuguese">Portuguese 🇧🇷</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5 min-w-[140px]">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Voice Profile</label>
+            <select
+              value={selectedVoiceId}
+              onChange={(e) => setSelectedVoiceId(e.target.value)}
+              className="px-4 py-2.5 bg-black border border-zinc-800 rounded-xl text-sm font-bold text-zinc-300 focus:border-violet-600 focus:ring-1 focus:ring-violet-600 outline-none hover:border-zinc-700 transition-all appearance-none cursor-pointer"
+              style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
+            >
+              <option value="originals">The Originals (Joe & Jane)</option>
+              <option value="deep-divers">The Deep-Divers (David & Sarah)</option>
+              <option value="trendspotters">The Trendspotters (Leo & Maya)</option>
             </select>
           </div>
         </div>
@@ -1427,7 +1457,11 @@ const App: React.FC = () => {
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8">
                           <p className="text-xs font-mono text-violet-400 tracking-widest uppercase">
-                            VOX HOSTS: JOE & JANE
+                            VOX HOSTS: {
+                              selectedVoiceId === 'deep-divers' ? 'DAVID & SARAH' :
+                                selectedVoiceId === 'trendspotters' ? 'LEO & MAYA' :
+                                  'JOE & JANE'
+                            }
                           </p>
                         </div>
                       </div>
