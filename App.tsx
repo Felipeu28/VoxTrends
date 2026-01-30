@@ -1194,7 +1194,7 @@ const App: React.FC = () => {
       )}
 
       {/* Sidebar */}
-      <aside className="hidden md:flex w-72 border-r border-zinc-900 flex-col p-8 gap-10 bg-zinc-950/20 shrink-0">
+      <aside className="hidden md:flex w-72 border-r border-zinc-900 flex-col p-8 gap-10 bg-zinc-950/20 shrink-0 h-screen sticky top-0 overflow-y-auto">
         <div className="flex items-center gap-3">
           <ICONS.Podcast className="w-8 h-8 text-violet-600" />
           <span className="text-2xl font-serif font-bold">VoxTrends</span>
