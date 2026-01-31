@@ -663,7 +663,7 @@ serve(async (req) => {
 
       if (cachedEdition) {
         const cacheTime = Date.now() - startTime;
-        console.log('✅ Returning cached edition');
+        console.log('✅ Returning cached edition (script-ready)');
 
         // Record cache hit asynchronously
         recordCacheHit(supabaseClient, cacheKey, cacheTime).catch((err) =>
@@ -676,16 +676,27 @@ serve(async (req) => {
           p_action: 'edition',
         });
 
+        // Count generated voice variants for this edition
+        const { data: variants } = await supabaseClient
+          .from('voice_variants')
+          .select('voice_id')
+          .eq('edition_id', cachedEdition.id);
+
+        // ==================== PHASE 3: RETURN CACHED SCRIPT-READY EDITION ====================
         return new Response(
           JSON.stringify({
             data: {
+              edition_id: cachedEdition.id,
               text: cachedEdition.content,
               script: cachedEdition.script,
-              audio: cachedEdition.audio_url,
               imageUrl: cachedEdition.image_url,
               links: cachedEdition.grounding_links,
               flashSummary: cachedEdition.flash_summary,
               cached: true,
+              scriptReady: true,
+              voiceVariantsAvailable: ['originals', 'deep-divers', 'trendspotters'],
+              voiceVariantsGeneratedCount: variants?.length || 0,
+              message: 'Content and script ready. Select a voice profile to generate audio.',
             },
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -722,7 +733,10 @@ serve(async (req) => {
       ?.trim()
       ?.slice(0, 100) || 'Daily News Briefing';
 
-    // Step 2-4: Sequential to smooth out resource spikes (Image, Summary, Script)
+    // ==================== PHASE 3: CONTENT + SCRIPT ONLY ====================
+    // Skip audio generation - users will select voice variant after content is ready
+    // This reduces TTS cost by ~90% (only generate audio for variants they actually want)
+
     console.log('Step 2: Generating flash summary...');
     let flashSummary = '';
     try {
@@ -747,54 +761,24 @@ serve(async (req) => {
       );
     } catch (e) { console.error('Script error:', e); }
 
-    console.log('Sequential generation complete:');
+    console.log('Content generation complete:');
     console.log('  - Summary:', flashSummary ? 'success' : 'failed');
     console.log('  - Image:', imageUrl ? 'success' : 'failed/skipped');
     console.log('  - Script:', script ? `success (${script.length} chars)` : 'failed');
+    console.log('  🎙️ Audio generation: SKIPPED (Phase 3 on-demand voice variants)');
 
-    // Step 5: Generate audio (requires script, run last)
-    let audioUrl: string | null = null;
-    let audioError: string | undefined;
-
-    if (script && script.length > 50) {
-      console.log('Generating audio from script...');
-      try {
-        const audioResult = await withTimeout(
-          gemini.generateAudio(
-            script,
-            voiceProfile.voices.lead,
-            voiceProfile.voices.expert,
-            voiceProfile.hosts.lead,
-            voiceProfile.hosts.expert
-          ),
-          45000, // 45s timeout for TTS
-          { data: null, error: 'TTS timeout' }
-        );
-        audioUrl = audioResult.data ? `data:audio/wav;base64,${audioResult.data}` : null;
-        audioError = audioResult.error;
-        console.log('Audio generation:', audioUrl ? 'success' : 'failed', audioError || '');
-      } catch (e: any) {
-        console.error('Audio generation error:', e);
-        audioError = e.message;
-      }
-    } else {
-      console.log('Skipping audio - no script available');
-      audioError = 'No script generated';
-    }
-
-    // STRICT VALIDATION: Only cache if the main components are successful
+    // STRICT VALIDATION: Only cache if content is successful
     if (!trendingNews || trendingNews.length < 500) {
       console.error('Validation Failed: News content too short or missing.');
       throw new Error('News research failed to produce quality content. Please try again.');
     }
 
-    if (!audioUrl) {
-      console.error('Validation Failed: Audio generation failed.');
-      // If audio fails, we do NOT cache, so the next attempt starts fresh
+    if (!script || script.length < 50) {
+      console.error('Validation Failed: Script generation failed.');
       return new Response(
         JSON.stringify({
-          error: 'Audio generation failed. Broadcast was not cached. Please try again.',
-          details: audioError
+          error: 'Script generation failed. Please try again.',
+          details: 'Could not generate podcast script'
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -804,25 +788,66 @@ serve(async (req) => {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 6);
 
-    await supabaseClient
+    // ==================== PHASE 3: CACHE SCRIPT-READY EDITION ====================
+    // Store content + script, but NOT audio (audio will be generated per-variant on-demand)
+    const { data: editionData, error: cacheError } = await supabaseClient
       .from('daily_editions')
       .upsert({
         edition_type: editionType,
         region,
         language,
         date: today,
+        user_id: user.id,
         content: trendingNews,
         script: script || '',
-        audio_url: audioUrl,
+        audio_url: null,  // Phase 3: No audio yet - generated on-demand
         image_url: imageUrl,
         grounding_links: groundingLinks,
         flash_summary: flashSummary,
         expires_at: expiresAt.toISOString(),
+        script_ready: true,
+        is_script_only: true,  // Marker for Phase 3 behavior
+        content_generated_at: new Date().toISOString(),
       }, {
         onConflict: 'edition_type,region,language,date'
+      })
+      .select()
+      .single();
+
+    if (cacheError) {
+      throw new Error(`Failed to cache edition: ${cacheError.message}`);
+    }
+
+    console.log('Edition cached (script-ready, audio on-demand per voice variant)');
+
+    // ==================== PHASE 4: SCHEDULE CONTENT DELETION ====================
+    // Create expiration schedule entry based on user's plan tier
+    const retentionHours = {
+      'Free': 24,
+      'Pro': 7 * 24,      // 7 days
+      'Studio': 30 * 24,  // 30 days
+    };
+
+    const tierRetentionHours = retentionHours[userPlan as keyof typeof retentionHours] || 24;
+    const scheduledDeletionAt = new Date();
+    scheduledDeletionAt.setHours(scheduledDeletionAt.getHours() + tierRetentionHours);
+
+    await supabaseClient
+      .from('content_expiration_schedule')
+      .upsert({
+        edition_id: editionData.id,
+        user_id: user.id,
+        tier: userPlan,
+        scheduled_deletion_at: scheduledDeletionAt.toISOString(),
+      }, {
+        onConflict: 'edition_id,user_id'
+      })
+      .catch((err) => {
+        console.warn(`⚠️ Failed to schedule content deletion: ${err}`);
+        // Non-blocking error - don't fail the whole function
       });
 
-    console.log('Edition cached');
+    console.log(`📅 Content scheduled for deletion in ${tierRetentionHours} hours (${userPlan} tier)`);
 
     // Increment usage
     await supabaseClient.rpc('increment_daily_usage', {
@@ -848,17 +873,23 @@ serve(async (req) => {
       console.warn(`⚠️ Failed to record cache miss: ${err}`)
     );
 
+    // ==================== PHASE 3: RETURN SCRIPT-READY EDITION ====================
+    // Return content + script, but NO audio
+    // Frontend will show voice variant selector and call generate-voice-variant when user picks one
     return new Response(
       JSON.stringify({
         data: {
+          edition_id: editionData.id,
           text: trendingNews,
           script: script || '',
-          audio: audioUrl,
-          audioError, // Return the error to the client
           imageUrl,
           links: groundingLinks,
           flashSummary,
           cached: false,
+          scriptReady: true,
+          voiceVariantsAvailable: ['originals', 'deep-divers', 'trendspotters'],
+          voiceVariantsGeneratedCount: 0,  // User hasn't selected any variants yet
+          message: 'Content and script ready. Select a voice profile to generate audio.',
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } }
