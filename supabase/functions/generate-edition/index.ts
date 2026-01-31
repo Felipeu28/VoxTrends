@@ -514,7 +514,7 @@ serve(async (req) => {
       );
     }
 
-    const { editionType, region, language, forceRefresh, voiceId = 'originals' } = body;
+    const { editionType, region, language, forceRefresh, voiceId = 'originals', generateAudio = false } = body;
 
     console.log('Edition request:', { editionType, region, language, forceRefresh, voiceId });
 
@@ -877,9 +877,34 @@ serve(async (req) => {
       console.warn(`⚠️ Failed to record cache miss: ${err}`)
     );
 
+    // ==================== PHASE 3: OPTIONAL AUDIO GENERATION ====================
+    let audioUrl = null;
+
+    if (generateAudio && script) {
+      try {
+        console.log('🎙️ Generating audio for voice profile:', voiceId);
+        const audioResult = await gemini.generateAudio(
+          script,
+          voiceProfile.voices.lead,
+          voiceProfile.voices.expert,
+          voiceProfile.hosts.lead,
+          voiceProfile.hosts.expert
+        );
+
+        if (audioResult.data) {
+          audioUrl = `data:audio/wav;base64,${audioResult.data}`;
+          console.log('✅ Audio generated successfully');
+        } else {
+          console.warn('⚠️ Audio generation returned no data:', audioResult.error);
+        }
+      } catch (audioError: any) {
+        console.error('❌ Audio generation error:', audioError);
+        // Don't fail the whole request if audio generation fails
+      }
+    }
+
     // ==================== PHASE 3: RETURN SCRIPT-READY EDITION ====================
-    // Return content + script, but NO audio
-    // Frontend will show voice variant selector and call generate-voice-variant when user picks one
+    // Return content + script, optionally with audio
     return new Response(
       JSON.stringify({
         data: {
@@ -889,11 +914,14 @@ serve(async (req) => {
           imageUrl,
           links: groundingLinks,
           flashSummary,
+          audio: audioUrl,  // Will be null if generateAudio was false or if generation failed
           cached: false,
           scriptReady: true,
           voiceVariantsAvailable: ['originals', 'deep-divers', 'trendspotters'],
-          voiceVariantsGeneratedCount: 0,  // User hasn't selected any variants yet
-          message: 'Content and script ready. Select a voice profile to generate audio.',
+          voiceVariantsGeneratedCount: audioUrl ? 1 : 0,
+          message: audioUrl
+            ? 'Content and script ready with audio!'
+            : 'Content and script ready. Select a voice profile to generate audio.',
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } }

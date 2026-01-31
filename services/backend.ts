@@ -68,7 +68,8 @@ export class BackendService {
     region: string,
     language: string,
     forceRefresh: boolean = false,
-    voiceId: string = 'originals'
+    voiceId: string = 'originals',
+    generateAudio: boolean = false
   ) {
     return this.callFunction('generate-edition', {
       editionType,
@@ -76,6 +77,7 @@ export class BackendService {
       language,
       forceRefresh,
       voiceId,
+      generateAudio,
     });
   }
 

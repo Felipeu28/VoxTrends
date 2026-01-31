@@ -55,8 +55,18 @@ export default function VoiceSelector({
     setError(null);
 
     try {
-      const result = await backend.generateVoiceVariant(editionId, voiceId);
-      const audioUrl = result.data?.audio_url;
+      // Call generate-edition with generateAudio flag to generate audio in one call
+      const result = await backend.generateEdition(
+        'Morning',  // These aren't used since we're regenerating, but required for API
+        'Global',
+        'English',
+        false,      // forceRefresh
+        voiceId,    // voiceId to use for this variant
+        // New parameter - tell generate-edition to generate audio
+        true        // generateAudio flag
+      );
+
+      const audioUrl = result.data?.audio;
 
       if (!audioUrl) {
         throw new Error('No audio URL returned from generation');
