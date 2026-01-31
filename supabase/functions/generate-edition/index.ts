@@ -53,19 +53,22 @@ function getPlanLimits(plan: string) {
 // ==================== VOICE PROFILES ====================
 const VOICE_PROFILES = {
   'originals': {
-    hosts: { lead: 'Joe', expert: 'Jane' },
+    hosts: { lead: 'Alex', expert: 'Jordan' },
     voices: { lead: 'Puck', expert: 'Kore' },
-    label: 'The Originals'
+    label: 'The Originals',
+    description: 'Classic dynamic duo - upbeat and confident'
   },
   'deep-divers': {
-    hosts: { lead: 'David', expert: 'Sarah' },
-    voices: { lead: 'Charon', expert: 'Aoede' },
-    label: 'The Deep-Divers'
+    hosts: { lead: 'Marcus', expert: 'Elena' },
+    voices: { lead: 'Charon', expert: 'Leda' },
+    label: 'The Deep-Divers',
+    description: 'Investigative pair - informative and youthful'
   },
   'trendspotters': {
-    hosts: { lead: 'Leo', expert: 'Maya' },
-    voices: { lead: 'Fenrir', expert: 'Kore' },
-    label: 'The Trendspotters'
+    hosts: { lead: 'Kai', expert: 'Sophia' },
+    voices: { lead: 'Alnilam', expert: 'Callirrhoe' },
+    label: 'The Trendspotters',
+    description: 'Energetic team - fresh perspectives on trending topics'
   }
 } as const;
 
