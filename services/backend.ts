@@ -181,6 +181,19 @@ export class BackendService {
   }
 
   /**
+   * Ask a question about an edition's content
+   */
+  async askQuestion(context: string, question: string, history: { role: string; text: string }[], language: string) {
+    const result = await this.callFunction('ask-question', {
+      context,
+      question,
+      history,
+      language,
+    });
+    return result.data?.answer || 'No answer available.';
+  }
+
+  /**
    * Get a shared edition by token (Phase 4 - public access)
    */
   async getSharedEdition(shareToken: string) {

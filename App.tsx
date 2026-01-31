@@ -127,11 +127,12 @@ const Toast: React.FC<{ message: string; visible: boolean; onHide: () => void }>
 // Enhanced Audio Player Component
 // Enhanced Audio Player Component - Handles both URLs and base64
 const AudioPlayer: React.FC<{
-  audioData: string | null;  // Changed from audioUrl
+  audioData: string | null;
   clipId: string;
   isPlaying: boolean;
   onPlayPause: () => void;
-}> = ({ audioData, clipId, isPlaying, onPlayPause }) => {
+  onEnded?: () => void;
+}> = ({ audioData, clipId, isPlaying, onPlayPause, onEnded }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
 
@@ -166,7 +167,7 @@ const AudioPlayer: React.FC<{
 
   return (
     <>
-      <audio ref={audioRef} src={audioSrc} preload="metadata" />
+      <audio ref={audioRef} src={audioSrc} preload="metadata" onEnded={onEnded} />
       <button
         onClick={onPlayPause}
         className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-3xl flex items-center justify-center shadow-2xl hover:scale-105 transition-all text-black"
@@ -300,8 +301,8 @@ const InterrogationHub: React.FC<{
     setHistory([...history, { role: 'user', text: q }]);
 
     try {
-      const res = await voxService.interrogate(context, q, history, language);
-      setHistory([...history, { role: 'user', text: q }, { role: 'model', text: res }]);
+      const result = await backend.askQuestion(context, q, history, language);
+      setHistory([...history, { role: 'user', text: q }, { role: 'model', text: result }]);
     } catch (error) {
       console.error('Interrogation error:', error);
       setHistory([...history, { role: 'user', text: q }, { role: 'model', text: 'Unable to process inquiry. Please try again.' }]);
@@ -1210,21 +1211,6 @@ const App: React.FC = () => {
                   <option value="Portuguese">Portuguese 🇧🇷</option>
                 </select>
               </div>
-              <div className="space-y-3">
-                <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">Voice Profile</label>
-                <select
-                  value={selectedVoiceId}
-                  onChange={(e) => {
-                    setSelectedVoiceId(e.target.value);
-                    setShowMobileSettings(false);
-                  }}
-                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
-                >
-                  <option value="originals">The Originals (Alex & Jordan)</option>
-                  <option value="deep-divers">The Deep-Divers (Marcus & Elena)</option>
-                  <option value="trendspotters">The Trendspotters (Kai & Sophia)</option>
-                </select>
-              </div>
               <div className="pt-6 border-t border-zinc-800 space-y-3">
                 <button
                   onClick={() => setShowClearCacheConfirm(true)}
@@ -1373,20 +1359,6 @@ const App: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1.5 min-w-[140px]">
-            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Voice Profile</label>
-            <select
-              value={selectedVoiceId}
-              onChange={(e) => setSelectedVoiceId(e.target.value)}
-              className="px-4 py-2.5 bg-black border border-zinc-800 rounded-xl text-sm font-bold text-zinc-300 focus:border-violet-600 focus:ring-1 focus:ring-violet-600 outline-none hover:border-zinc-700 transition-all appearance-none cursor-pointer"
-              style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
-            >
-              <option value="originals">The Originals (Alex & Jordan)</option>
-              <option value="deep-divers">The Deep-Divers (Marcus & Elena)</option>
-              <option value="trendspotters">The Trendspotters (Kai & Sophia)</option>
-            </select>
-          </div>
-
           <div className="pt-4 border-t border-zinc-800">
             <button
               onClick={() => setShowClearCacheConfirm(true)}
@@ -1482,13 +1454,6 @@ const App: React.FC = () => {
                             >
                               💾 SAVE
                             </button>
-                            <button
-                              onClick={() => handleGenerateDaily(activeTab, true)}
-                              disabled={loading}
-                              className="px-8 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold tracking-wide text-violet-400 hover:border-violet-600 transition-all disabled:opacity-50"
-                            >
-                              🔄 Regenerate
-                            </button>
                           </div>
 
                           {/* Phase 3: Show VoiceSelector if scriptReady but no audio yet */}
@@ -1510,18 +1475,21 @@ const App: React.FC = () => {
                               />
                             </div>
                           ) : (
-                            <AudioPlayer
-                              audioData={currentDaily.audio}
-                              clipId={`edition-${activeTab}`}
-                              isPlaying={playingClipId === `edition-${activeTab}`}
-                              onPlayPause={() => {
-                                if (playingClipId === `edition-${activeTab}`) {
-                                  setPlayingClipId(null);
-                                } else {
-                                  setPlayingClipId(`edition-${activeTab}`);
-                                }
-                              }}
-                            />
+                            <div className="flex justify-center py-6">
+                              <AudioPlayer
+                                audioData={currentDaily.audio}
+                                clipId={`edition-${activeTab}`}
+                                isPlaying={playingClipId === `edition-${activeTab}`}
+                                onPlayPause={() => {
+                                  if (playingClipId === `edition-${activeTab}`) {
+                                    setPlayingClipId(null);
+                                  } else {
+                                    setPlayingClipId(`edition-${activeTab}`);
+                                  }
+                                }}
+                                onEnded={() => setPlayingClipId(null)}
+                              />
+                            </div>
                           )}
                         </>
                       ) : (
@@ -1805,6 +1773,7 @@ const App: React.FC = () => {
                                   setPlayingClipId(clip.id);
                                 }
                               }}
+                              onEnded={() => setPlayingClipId(null)}
                             />
                           </div>
                         )}
