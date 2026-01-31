@@ -47,6 +47,27 @@ function getPlanLimits(plan: string) {
   return PLAN_LIMITS[plan as Plan] || PLAN_LIMITS.Free;
 }
 
+// ==================== VOICE PROFILES ====================
+const VOICE_PROFILES = {
+  'originals': {
+    hosts: { lead: 'Joe', expert: 'Jane' },
+    voices: { lead: 'Puck', expert: 'Kore' },
+    label: 'The Originals'
+  },
+  'deep-divers': {
+    hosts: { lead: 'David', expert: 'Sarah' },
+    voices: { lead: 'Charon', expert: 'Aoede' },
+    label: 'The Deep-Divers'
+  },
+  'trendspotters': {
+    hosts: { lead: 'Leo', expert: 'Maya' },
+    voices: { lead: 'Fenrir', expert: 'Kore' },
+    label: 'The Trendspotters'
+  }
+} as const;
+
+type VoiceId = keyof typeof VOICE_PROFILES;
+
 // ==================== GEMINI SERVICE ====================
 
 // Helper: Create WAV header for PCM audio (24kHz, 16-bit, mono)
@@ -179,7 +200,7 @@ class GeminiService {
     }
   }
 
-  async generatePodcastScript(trends: string, language: string, duration: string = '1 minute') {
+  async generatePodcastScript(trends: string, language: string, duration: string = '1:30', hostLead: string = 'Joe', hostExpert: string = 'Jane') {
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.0-flash',
@@ -189,13 +210,13 @@ class GeminiService {
         Language: ${language}.
 
         Hosts:
-        - Joe: High-energy, charismatic main host.
-        - Jane: Intelligent, analytical research expert.
+        - ${hostLead}: High-energy, charismatic main host.
+        - ${hostExpert}: Intelligent, analytical research expert.
 
         Format:
-        Joe: [Welcome and hook]
-        Jane: [Detailed analysis of trends]
-        Joe: [Closing and sign-off]
+        ${hostLead}: [Welcome and hook]
+        ${hostExpert}: [Detailed analysis of trends]
+        ${hostLead}: [Closing and sign-off]
 
         Output only the script text. Do not use emojis.` }]
         }],
@@ -211,9 +232,9 @@ class GeminiService {
     }
   }
 
-  async generateAudio(script: string): Promise<{ data: string | null; error?: string }> {
+  async generateAudio(script: string, voiceLead: string = 'Puck', voiceExpert: string = 'Kore', hostLead: string = 'Joe', hostExpert: string = 'Jane'): Promise<{ data: string | null; error?: string }> {
     try {
-      console.log('Starting TTS generation...');
+      console.log(`Starting TTS generation with voices ${voiceLead} and ${voiceExpert}...`);
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: script }] }],
@@ -222,8 +243,8 @@ class GeminiService {
           speechConfig: {
             multiSpeakerVoiceConfig: {
               speakerVoiceConfigs: [
-                { speaker: 'Joe', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } } },
-                { speaker: 'Jane', voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } }
+                { speaker: hostLead, voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceLead } } },
+                { speaker: hostExpert, voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceExpert } } }
               ]
             }
           }
@@ -335,9 +356,13 @@ serve(async (req) => {
       );
     }
 
-    const { editionType, region, language, forceRefresh } = body;
+    const { editionType, region, language, forceRefresh, voiceId = 'originals' } = body;
 
-    console.log('Edition request:', { editionType, region, language, forceRefresh });
+    console.log('Edition request:', { editionType, region, language, forceRefresh, voiceId });
+
+    // Select voice profile
+    const profileKey = (VOICE_PROFILES[voiceId as VoiceId] ? voiceId : 'originals') as VoiceId;
+    const voiceProfile = VOICE_PROFILES[profileKey];
 
     // Validate inputs
     if (!editionType || !region || !language) {
@@ -510,10 +535,16 @@ serve(async (req) => {
       imageUrl = await withTimeout(gemini.generateCoverArt(firstTopic), 30000, null);
     } catch (e) { console.error('Image error:', e); }
 
-    console.log('Step 4: Generating podcast script...');
+    console.log('Step 4: Generating podcast script (90s)...');
     let script = '';
     try {
-      script = await gemini.generatePodcastScript(trendingNews, language, '1 minute');
+      script = await gemini.generatePodcastScript(
+        trendingNews,
+        language,
+        '1:30',
+        voiceProfile.hosts.lead,
+        voiceProfile.hosts.expert
+      );
     } catch (e) { console.error('Script error:', e); }
 
     console.log('Sequential generation complete:');
@@ -529,7 +560,13 @@ serve(async (req) => {
       console.log('Generating audio from script...');
       try {
         const audioResult = await withTimeout(
-          gemini.generateAudio(script),
+          gemini.generateAudio(
+            script,
+            voiceProfile.voices.lead,
+            voiceProfile.voices.expert,
+            voiceProfile.hosts.lead,
+            voiceProfile.hosts.expert
+          ),
           45000, // 45s timeout for TTS
           { data: null, error: 'TTS timeout' }
         );
@@ -543,6 +580,24 @@ serve(async (req) => {
     } else {
       console.log('Skipping audio - no script available');
       audioError = 'No script generated';
+    }
+
+    // STRICT VALIDATION: Only cache if the main components are successful
+    if (!trendingNews || trendingNews.length < 500) {
+      console.error('Validation Failed: News content too short or missing.');
+      throw new Error('News research failed to produce quality content. Please try again.');
+    }
+
+    if (!audioUrl) {
+      console.error('Validation Failed: Audio generation failed.');
+      // If audio fails, we do NOT cache, so the next attempt starts fresh
+      return new Response(
+        JSON.stringify({
+          error: 'Audio generation failed. Broadcast was not cached. Please try again.',
+          details: audioError
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Cache the edition
