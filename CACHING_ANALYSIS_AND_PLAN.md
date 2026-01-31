@@ -11,14 +11,17 @@
 VoxTrends currently implements a **6-hour cache** strategy for daily editions (Morning/Midday/Evening), storing generated content, audio, and images in Supabase. However, the current system has several critical gaps that limit scalability, user experience, and cost efficiency:
 
 1. **No automated generation** - editions are user-initiated, not scheduled
-2. **Inefficient regeneration handling** - no deduplication when users refresh the same content
+2. **Inefficient voice variant handling** - regenerates full content when users select different voices
 3. **Media storage fragmentation** - images and audio scattered across storage with no lifecycle management
-4. **Suboptimal sharing** - same edition regenerated multiple times instead of served from cache
-5. **Missing analytics** - no visibility into cache hit rates or regeneration patterns
+4. **Suboptimal sharing** - no mechanism for users to share editions with others or virally grow
+5. **Missing analytics** - no visibility into cache hit rates, voice popularity, or generation patterns
 6. **No CDN optimization** - media served directly from storage without optimization
 7. **Unclear retention policy** - no documented cleanup strategy for expired editions
+8. **Limited dashboard utility** - no admin visibility into cache performance and auto-retry status
 
-This document provides a complete analysis and a phased implementation plan to solve these issues.
+This document provides a complete analysis and a phased implementation plan to solve these issues. **Strategic shift:** Implement a **content + voice layer separation** where edition content is generated once and cached, then voice variants are generated on-demand only for new voices, dramatically reducing API calls and costs.
+
+**NEW FEATURES:** Shareable audio links for viral growth, voice-enabled Guided Researcher, unified credit system across features.
 
 ---
 
@@ -27,38 +30,42 @@ This document provides a complete analysis and a phased implementation plan to s
 ### 1.1 Current Caching Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CURRENT ARCHITECTURE                         │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Frontend User Action                                           │
-│         ↓                                                       │
-│  BackendService.generateEdition()                              │
-│  {editionType, region, language, forceRefresh, voiceId}       │
-│         ↓                                                       │
-│  Supabase Edge Function: generate-edition                      │
-│         ├─ Check user plan & daily limits                      │
-│         ├─ Check Supabase cache (6-hour TTL)                  │
-│         │   └─ If hit: Return cached content + increment counter
-│         │   └─ If miss: Proceed to generation                  │
-│         ├─ Fetch trending news (Gemini + Google Search)       │
-│         ├─ Generate flash summary (Gemini)                    │
-│         ├─ Generate cover art (Imagen 4.0)                    │
-│         ├─ Generate podcast script (Gemini)                   │
-│         ├─ Generate audio (Text-to-Speech)                    │
-│         └─ Cache entire result in daily_editions table        │
-│                (6-hour expiration)                             │
-│         ↓                                                       │
-│  Store in Supabase Storage:                                    │
-│  ├─ Audio: /users/{userId}/audio/{timestamp}.wav             │
-│  └─ Image: /users/{userId}/images/{timestamp}.png             │
-│         ↓                                                       │
-│  Store in Browser IndexedDB:                                   │
-│  └─ vox_daily_editions_v3 (with date stamp)                   │
-│         ↓                                                       │
-│  Return to Frontend & Display                                  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│               PROPOSED VOICE-FIRST ARCHITECTURE                  │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  CONTENT LAYER (Generated Once Per Edition)                     │
+│  ├─ Supabase Edge Function: generate-edition                   │
+│  ├─ Check cache for {edition_type}-{region}-{language}-{date}  │
+│  │  └─ If hit: Return content layer + check voice variants    │
+│  │  └─ If miss: Proceed to generation                          │
+│  ├─ Fetch trending news (Gemini + Google Search)              │
+│  ├─ Generate flash summary (Gemini)                           │
+│  ├─ Generate cover art (Imagen 4.0)                           │
+│  ├─ Generate podcast script (Gemini)                          │
+│  └─ Cache in daily_editions table (6-hour expiration)         │
+│                                                                  │
+│  VOICE LAYER (Generated On-Demand Per Voice Selection)         │
+│  ├─ User selects voice (e.g., "Original", "Deep Diver")       │
+│  ├─ Check cache for {edition-hash}-{voice-profile}            │
+│  │  └─ If hit: Return cached audio instantly                  │
+│  │  └─ If miss: Generate voice variant (TTS only)             │
+│  └─ Cache in daily_edition_voices table                       │
+│     (indefinite - content doesn't change)                      │
+│                                                                  │
+│  Store in Supabase Storage:                                     │
+│  ├─ Content: /editions/{type}/{date}/{region}/{lang}/          │
+│  │           content.json, script.txt, image/cover.png         │
+│  └─ Voice Variants: /editions/{type}/{date}/{region}/{lang}/   │
+│                     audio/{voice}-{contentHash}.wav             │
+│                                                                  │
+│  Store in Browser IndexedDB:                                    │
+│  ├─ Content layer (24-hour TTL, date-validated)               │
+│  └─ Voice preference (permanent, with version tracking)        │
+│                                                                  │
+│  Return to Frontend & Display                                   │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 **Key Components:**
@@ -176,32 +183,64 @@ if (forceRefresh) {
 
 ---
 
-### Issue #2: Inefficient Regeneration (High Priority)
+### Issue #2: Inefficient Voice Variant Handling (High Priority) ⭐ STRATEGIC SHIFT
 
 **Current State:**
 ```
-User A generates Morning:
+User A generates Morning with Voice 1 (Original):
   - Calls Gemini → generates news
   - Calls Imagen → generates image
-  - Calls TTS → generates audio
-  - Stores in database
+  - Calls Gemini → generates script
+  - Calls TTS → generates audio in Original voice
+  - Stores entire edition in database
 
-User B refreshes Morning (forceRefresh):
-  - Calls Gemini AGAIN → generates same news
-  - Calls Imagen AGAIN → generates new image (different)
-  - Calls TTS AGAIN → generates new audio (different)
-  - Stores as new entry
+User B wants same Morning with Voice 2 (Deep Diver):
+  - Calls Gemini AGAIN → generates SAME news (waste)
+  - Calls Imagen AGAIN → generates SAME image (waste)
+  - Calls Gemini AGAIN → generates SAME script (waste)
+  - Calls TTS → generates audio in Deep Diver voice
+  - Stores as new edition entry
 
-Result: 6 API calls instead of 3, 2x cost for same news content
+Result: 4 wasted API calls per voice variant
 ```
 
-**Problems:**
-- No detection of concurrent regenerations
-- Multiple users can trigger same generation simultaneously
-- No request batching or coalescing
-- Cost explosion with scale
+**PROPOSED SOLUTION - Content + Voice Layer Separation:**
+```
+Morning Edition Generated Once (Content Layer):
+  ├─ Calls Gemini → generates news (CACHED)
+  ├─ Calls Imagen → generates image (CACHED)
+  └─ Calls Gemini → generates script (CACHED)
 
-**Impact:** Cost, Scalability, Performance
+User A selects Voice 1 (Voice Layer):
+  └─ Calls TTS → generates audio in Original voice (CACHED)
+
+User B selects Voice 2 (Voice Layer):
+  └─ Calls TTS → generates audio in Deep Diver voice (CACHED)
+
+User C selects Voice 1 again (Voice Layer):
+  └─ Returns cached audio instantly (NO API CALL)
+
+Result per 100 users across 3 voices:
+  - Content: 1 full generation
+  - Voices: 3 TTS calls (one per unique voice)
+  - Total: 4 API calls instead of ~100
+  - Impact: 96% API cost reduction
+```
+
+**Benefits of This Approach:**
+- Content generated once, voice variants generated on-demand
+- Natural UI: "Select a Voice" button instead of confusing "Refresh" button
+- Voice library built over time as users try different voices
+- Future voice additions have zero regeneration cost (just add new TTS)
+- Clear credit system: changing voice = small cost, changing content = wait for next scheduled generation
+
+**Problems Eliminated:**
+- No duplicate content generation
+- No concurrent generation conflicts
+- Clear user mental model
+- Significant cost savings
+
+**Impact:** Cost (-96%), UX clarity, Scalability
 
 ---
 
@@ -733,6 +772,146 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 
 ---
 
+## Part 3.5: New Feature Opportunities (Strategic Additions)
+
+### Feature 1: Shareable Audio Links (Growth Driver)
+
+**Concept:** Users can share edition audio with non-authenticated users, enabling viral growth
+
+**Implementation Strategy:**
+
+```
+User's Perspective:
+- Listens to Morning Edition
+- Clicks "Share" → Generates shareable link
+- Shares link in Slack/Twitter/iMessage
+- Friend clicks link → Listens to audio without signup
+
+Backend Tracking:
+- Share creates unique {shareId}
+- Maps to {edition-id, voice-id, shared-by-user-id}
+- Tracks clicks → which users shared → referral metrics
+```
+
+**Database Schema:**
+```sql
+CREATE TABLE shared_edition_links (
+  id UUID PRIMARY KEY,
+  edition_id UUID REFERENCES daily_editions,
+  voice_id VARCHAR(50),  -- which voice variant
+  shared_by_user_id UUID REFERENCES users,
+  share_token VARCHAR(64) UNIQUE,  -- URL slug
+  created_at TIMESTAMP,
+  expires_at TIMESTAMP,  -- optional: expire after 30 days
+  click_count INT DEFAULT 0,
+  clicks_by_friend_id UUID[]  -- track if friends signed up
+);
+```
+
+**Features:**
+- Direct audio link (unauthenticated access)
+- Click tracking for analytics
+- Optional expiration (keep fresh content visible)
+- Friend referral tracking (if they sign up)
+- Copy-to-clipboard button
+- Social media preview (og:title, og:image, og:audio)
+
+**Growth Impact:**
+- Lower friction to try VoxTrends
+- Organic virality (word-of-mouth sharing)
+- Referral tracking for incentives
+- User acquisition measurement
+
+---
+
+### Feature 2: Voice-Enabled Guided Researcher (Feature Expansion)
+
+**Concept:** Users can enable voice narration for Guided Researcher, building unified feature ecosystem
+
+**Current State:** Guided Researcher is text-only deep-dive research tool
+
+**Enhancement:**
+```
+User starts Guided Researcher for "AI Regulation Trends":
+- Reads text analysis (as today)
+- NEW: "Narrate this section" button
+- Voice reads text in selected voice (Original/Deep Diver/Trendsetter)
+- Caches result for others using same voice
+- Voice variants build over time
+```
+
+**Integration with Voice Cache:**
+```
+Same voice infrastructure for both:
+├─ Daily Edition audio
+│  └─ /editions/{type}/{date}/{region}/{lang}/audio/{voice}.wav
+└─ Guided Researcher audio
+   └─ /research/{research-id}/{section-id}/{voice}.wav
+
+Same content-hash based deduplication
+Same voice caching strategy
+```
+
+**Credit System Unified:**
+```
+User monthly credits (e.g., Pro = 100 credits):
+
+Can spend on either:
+├─ Guided Researcher voice narration (e.g., 2 credits per section)
+└─ Alternative voice for editions (e.g., 1 credit per voice, one-time)
+
+Incentivizes usage of both features
+Natural upsell to Pro tier
+```
+
+---
+
+### Feature 3: Unified Credit System (Monetization)
+
+**Current State:** No credit/token system visible in codebase
+
+**Proposed System:**
+
+```
+User Plans:
+├─ Free
+│  ├─ 3 editions/day
+│  ├─ Standard voice only (Original)
+│  └─ 0 credits/month
+│
+├─ Pro ($9.99/month or similar)
+│  ├─ Unlimited editions/day
+│  ├─ All voice variants
+│  ├─ Guided Researcher with voice
+│  └─ 100 credits/month to spend on:
+│      ├─ Archive past editions (1 credit each)
+│      ├─ Premium voices if added (5 credits each)
+│      └─ Guided Researcher deep-dive voice (2 credits/section)
+│
+└─ Enterprise
+   ├─ Everything Pro
+   ├─ Custom voice profiles
+   └─ Unlimited credits
+```
+
+**Database Updates:**
+```sql
+ALTER TABLE users ADD COLUMN monthly_credits INT DEFAULT 0;
+ALTER TABLE users ADD COLUMN credits_used INT DEFAULT 0;
+
+CREATE TABLE credit_transactions (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES users,
+  transaction_type VARCHAR(50),  -- 'voice_variant', 'researcher_narration'
+  edition_id UUID,  -- optional
+  research_id UUID,  -- optional
+  credits_spent INT,
+  created_at TIMESTAMP
+);
+```
+
+---
+
 ## Part 4: Comprehensive Implementation Roadmap
 
 ### Phase 1: Foundation (Weeks 1-2) - HIGH PRIORITY
@@ -810,14 +989,23 @@ WHERE created_at < NOW() - INTERVAL '90 days'
    - Expected impact: Consistent cache availability
    ```
 
-3. **Create Admin Dashboard (Priority: 🟠 HIGH)**
+3. **Create Admin Dashboard with Auto-Retry (Priority: 🟠 HIGH)**
    ```
-   Frontend: /admin/scheduling
-   - View scheduled generation status
-   - Trigger manual generation
-   - View generation logs
-   - View cache analytics
-   - Expected impact: Better operational visibility
+   Frontend: /admin/dashboard
+
+   MONITORING (Primary Purpose):
+   - View scheduled generation status for today
+   - See failed generation attempts (to verify auto-retry)
+   - View cache hit rate trends
+   - View voice variant popularity
+   - Track shared link analytics
+   - Monitor credit usage
+
+   AUTOMATION (No Manual Triggers):
+   - Backend auto-retries failed generations after 2-5 minutes
+   - No manual "Regenerate" button needed
+   - Dashboard shows retry status/history
+   - Expected impact: Reliable generation without manual intervention
    ```
 
 4. **Update Generation Logic (Priority: 🟠 HIGH)**
@@ -837,76 +1025,136 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 
 ---
 
-### Phase 3: Media Optimization (Weeks 5-6) - MEDIUM PRIORITY
+### Phase 3: Voice Variant Caching & Multi-Voice Support (Weeks 5-6) - MEDIUM PRIORITY
 
-**Goal:** Implement content-addressed storage, reduce duplication
+**Goal:** Implement voice-first architecture with multi-voice caching
 
 **Tasks:**
 
-1. **Design New Storage Structure (Priority: 🟠 HIGH)**
+1. **Design Voice-First Architecture (Priority: 🟠 HIGH)**
    ```
-   Documentation: Storage architecture
-   - Define path conventions
-   - Define hash strategy (SHA-256 of content)
-   - Define versioning scheme
-   - Expected impact: Clear migration path
+   Documentation: Voice variant strategy
+   - Content layer: Generated once per edition
+   - Voice layer: Generated per voice selection
+   - Storage paths: /editions/{type}/{date}/{region}/{lang}/audio/{voice}.wav
+   - Database schema: New daily_edition_voices table
+   - Expected impact: Clear architecture for voice selection
    ```
 
-2. **Implement Content Hashing (Priority: 🟠 HIGH)**
+2. **Create Voice Variant Cache Table (Priority: 🟠 HIGH)**
+   ```
+   File: database.ts, migration
+   - New table: daily_edition_voices
+   - Fields: edition_id, voice_profile, audio_url, generated_at
+   - Index: (edition_id, voice_profile) for fast lookups
+   - TTL: No expiration (content doesn't change, only voices added)
+   - Expected impact: Track all voice variants for each edition
+   ```
+
+3. **Separate Content & Voice Generation (Priority: 🟠 HIGH)**
    ```
    File: generate-edition/index.ts
-   - Calculate hash of generated text content
-   - Use hash in storage paths
-   - Store hash in database metadata
-   - Expected impact: Enable deduplication
+   - Step 1: Generate content (news, summary, script, image)
+     └─ Cache as "content layer"
+   - Step 2: User selects voice
+   - Step 3: Check daily_edition_voices for {edition, voice}
+     └─ If exists: Return cached audio
+     └─ If missing: Generate TTS only, cache it
+   - Expected impact: 90%+ reduction in TTS calls
    ```
 
-3. **Migrate Media Storage (Priority: 🟠 HIGH)**
+4. **Add Voice Selection UI (Priority: 🟡 MEDIUM)**
    ```
-   File: services/storage.ts, migration script
-   - Move files to new structure
-   - Update database references
-   - Verify URLs still work
-   - Expected impact: 30-50% storage reduction
-   ```
-
-4. **Implement CDN Configuration (Priority: 🟡 MEDIUM)**
-   ```
-   File: CDN setup (Cloudflare/Cloudfront)
-   - Configure caching headers
-   - Set up cache purge webhooks
-   - Enable compression
-   - Expected impact: Faster media delivery globally
+   File: App.tsx, components
+   - Show available voice options after edition loads
+   - Display which voices are "ready" vs "generating"
+   - Button: "Generate New Voice" for unavailable voices
+   - Show voice library: "You have access to 3 voices"
+   - Expected impact: Clear user mental model
    ```
 
 **Expected Outcomes:**
-- 30-50% reduction in storage used
-- Better CDN efficiency
-- Cleaner media management
-- Foundation for content versioning
+- 90%+ reduction in TTS API calls
+- Natural voice selection workflow
+- Voice library builds over time
+- Foundation for Guided Researcher voice feature
 
 ---
 
-### Phase 4: Cache Tiers (Weeks 7-8) - MEDIUM PRIORITY
+### Phase 4: New Growth Features (Weeks 7-8) - MEDIUM PRIORITY
 
-**Goal:** Implement multi-layer caching strategy
+**Goal:** Enable sharing and expand credit system for new revenue streams
+
+**Tasks:**
+
+1. **Implement Shareable Audio Links (Priority: 🟠 HIGH)**
+   ```
+   Database: shared_edition_links table
+   File: services/sharing.ts, backend.ts
+   - Create shareable URL per audio
+   - Format: voxtrends.com/shared/{shareId}
+   - Unauthenticated access to audio
+   - Track clicks and referrals
+   - Expected impact: Organic user growth
+   ```
+
+2. **Add Voice to Guided Researcher (Priority: 🟠 HIGH)**
+   ```
+   File: supabase/functions/conduct-research/index.ts
+   - Add voiceId parameter to research narration
+   - Use same voice caching as editions
+   - Generate audio for research sections
+   - Expected impact: Expand feature value
+   ```
+
+3. **Implement Unified Credit System (Priority: 🟠 HIGH)**
+   ```
+   Database: credit_transactions table
+   File: App.tsx, pricing pages
+   - Add monthly_credits to users table
+   - Track credit spending per feature
+   - Display credit balance prominently
+   - Show costs for voice variants vs researcher
+   - Expected impact: Revenue model clarity
+   ```
+
+4. **Update Pricing Tiers (Priority: 🟡 MEDIUM)**
+   ```
+   File: pricing/plans.ts
+   - Free: 3 editions, standard voice only
+   - Pro: Unlimited editions, all voices, 100 credits/mo
+   - Show credit breakdown in pricing page
+   - Expected impact: Clear upsell path
+   ```
+
+**Expected Outcomes:**
+- Viral growth mechanism (shareable links)
+- Expanded Guided Researcher feature
+- Revenue diversification (credit system)
+- Clear pricing and upgrade path
+
+---
+
+### Phase 5: Advanced Cache Tiers (Weeks 9-10) - MEDIUM PRIORITY
+
+**Goal:** Implement multi-layer caching strategy for maximum performance
 
 **Tasks:**
 
 1. **Enhance Browser Cache (Priority: 🟡 MEDIUM)**
    ```
    File: services/db.ts
-   - Implement 24-hour TTL
-   - Date-based invalidation
-   - Version tracking
+   - Implement 24-hour TTL for content layer
+   - Date-based invalidation (clear if new day)
+   - Version tracking for voice preferences
    - Expected impact: Instant load for returning users
    ```
 
 2. **Implement Service Worker (Priority: 🟡 MEDIUM)**
    ```
    File: public/service-worker.ts
-   - Cache media files
-   - Enable offline mode
+   - Cache media files (audio + images)
+   - Enable offline mode (read cached editions)
    - Implement cache versioning
    - Expected impact: Offline access, reduced server load
    ```
@@ -914,30 +1162,30 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 3. **Add Server Memory Cache (Priority: 🟡 MEDIUM)**
    ```
    File: generate-edition/index.ts
-   - Cache today's editions in memory
-   - 1-hour TTL
-   - Automatic cleanup
+   - Cache today's editions (content layer) in memory
+   - 1-hour TTL with LRU eviction
+   - Automatic cleanup per edition
    - Expected impact: Reduce database queries by 70%
    ```
 
 4. **CDN Cache Headers (Priority: 🟡 MEDIUM)**
    ```
    File: API routes, storage configuration
-   - Set appropriate Cache-Control headers
-   - Implement cache versioning
-   - Set up invalidation strategy
+   - Set Cache-Control: public, max-age=3600 for media
+   - Implement cache versioning with content hash
+   - Set up cache purge webhooks
    - Expected impact: Faster global delivery
    ```
 
 **Expected Outcomes:**
 - Near-instant page loads for returning users
-- Offline support
+- Offline support for downloaded editions
 - Reduced database load by 90%
 - Better performance globally
 
 ---
 
-### Phase 5: Cleanup & Retention (Weeks 9-10) - LOW PRIORITY
+### Phase 6: Cleanup & Retention (Weeks 11-12) - LOW PRIORITY
 
 **Goal:** Implement automated cleanup and archival
 
@@ -986,7 +1234,7 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 
 ---
 
-### Phase 6: Monitoring & Optimization (Weeks 11-12) - ONGOING
+### Phase 7: Monitoring & Optimization (Weeks 13-14) - ONGOING
 
 **Goal:** Continuous improvement based on metrics
 
@@ -1435,7 +1683,7 @@ LIMIT 20;
    - Effort: 2-3 hours
 
 3. **Implement Cache Analytics Table** (High)
-   - Track hits/misses/refreshes
+   - Track hits/misses/voice variant popularity
    - Impact: Full visibility into cache behavior
    - Effort: 4-5 hours
 
@@ -1446,34 +1694,43 @@ LIMIT 20;
    - Impact: Data for decision-making
    - Effort: 3-4 hours
 
-5. **Scheduled Generation** (Critical)
+5. **Scheduled Generation with Auto-Retry** (Critical)
    - Pre-generate editions on schedule
-   - Impact: Content always available
-   - Effort: 6-8 hours
+   - Auto-retry failed generations every 2-5 minutes
+   - Impact: Content always available, 99%+ success rate
+   - Effort: 8-10 hours
 
 ### Medium Priority (Week 3-4)
 
-6. **Content-Addressed Storage** (Medium)
-   - Deduplicate media files
-   - Impact: 30-50% storage reduction
-   - Effort: 8-10 hours
+6. **Voice Variant Architecture** (Medium)
+   - Separate content layer from voice layer
+   - Implement voice selection UI
+   - Impact: 90%+ reduction in TTS calls
+   - Effort: 10-12 hours
 
-7. **Service Worker Caching** (Medium)
-   - Cache media locally
-   - Impact: Offline support, reduced server load
+7. **Shareable Audio Links** (Medium)
+   - Enable viral growth through sharing
+   - Track referrals and analytics
+   - Impact: Organic user acquisition
    - Effort: 6-8 hours
 
 ### Lower Priority (Week 5+)
 
-8. **Cleanup & Retention** (Low)
+8. **Guided Researcher Voice** (Low)
+   - Add voice narration to research
+   - Share voice caching infrastructure
+   - Impact: Feature expansion
+   - Effort: 4-6 hours
+
+9. **Cleanup & Retention** (Low)
    - Automated storage management
    - Impact: Predictable costs
    - Effort: 6-8 hours
 
-9. **CDN Integration** (Low)
-   - Global media delivery
-   - Impact: Faster access worldwide
-   - Effort: 4-6 hours
+10. **CDN Integration** (Low)
+    - Global media delivery
+    - Impact: Faster access worldwide
+    - Effort: 4-6 hours
 
 ---
 
@@ -1481,19 +1738,25 @@ LIMIT 20;
 
 ### During Implementation
 
-1. **Cache Hit Rate** - Target: 85%+ (currently: unknown)
-2. **API Call Reduction** - Target: 60-80% fewer calls during peak
-3. **Storage Size** - Target: 30-50% reduction
-4. **Generation Time** - Target: <500ms avg (currently: 5-10s)
-5. **User Experience** - Target: Instant load for returning users
+1. **Cache Hit Rate (Content Layer)** - Target: 85%+ (currently: unknown)
+2. **Voice Variant Reuse Rate** - Target: 70%+ of requests use cached voices
+3. **API Call Reduction** - Target: 90%+ fewer TTS calls, 95%+ fewer content generation calls
+4. **Generation Success Rate** - Target: 99%+ (with auto-retry)
+5. **User Experience** - Target: Instant load for returning users (<500ms)
 
 ### After Full Implementation
 
-1. **Cache Hit Rate:** 90%+ (measured daily)
-2. **Cost Savings:** 50-70% reduction in API costs
-3. **Storage Savings:** 40-60% reduction
-4. **User Satisfaction:** Faster, more reliable experience
-5. **Operational Efficiency:** Automated generation, cleanup, monitoring
+1. **Cache Hit Rate:** 95%+ (content layer reuse)
+2. **Voice Variant Hit Rate:** 85%+ (users selecting already-generated voices)
+3. **Cost Savings:** 75-85% reduction in API costs vs. current
+4. **Storage Savings:** 50-70% reduction (voice-first architecture)
+5. **User Acquisition:** 20-30% increase via shareable links
+6. **Revenue:** Unified credit system with clear monetization path
+7. **Operational Efficiency:**
+   - Automated generation (3x daily)
+   - Auto-retry for failures (99%+ availability)
+   - Automated cleanup and archival
+   - Real-time monitoring dashboard
 
 ---
 
@@ -1528,18 +1791,55 @@ LIMIT 20;
 
 ## Conclusion
 
-The current VoxTrends caching system is functional but inefficient at scale. By implementing the recommended solutions in order of priority, you can:
+The current VoxTrends caching system is functional but operates on an outdated "regenerate everything" model. This analysis proposes a **strategic architectural shift** to a **voice-first, content-plus-voice-layer architecture** that enables:
 
-1. **Reduce API costs by 50-70%** through request coalescing and smart regeneration
-2. **Improve user experience dramatically** with scheduled generation and multi-tier caching
-3. **Reduce storage costs by 40-60%** with content-addressed storage
-4. **Gain operational visibility** through comprehensive analytics and monitoring
-5. **Enable future scaling** with automated management and cleanup
+### Strategic Improvements:
 
-**Recommended Next Step:** Start with Phase 1 (Request Coalescing + Force Refresh Throttling + Cache Analytics) to immediately see cost and performance improvements, then proceed with scheduled generation for the complete solution.
+1. **Voice-First Architecture** (90%+ TTS cost reduction)
+   - Generate content once per edition
+   - Generate voice variants only on-demand
+   - Build voice library over time
+   - Natural UI: "Select a Voice" instead of "Refresh"
+
+2. **Automated Reliable Generation** (99%+ availability)
+   - 3x daily scheduled pre-generation (Morning/Midday/Evening)
+   - Auto-retry failures every 2-5 minutes
+   - Admin dashboard for monitoring, not manual triggers
+
+3. **Growth & Monetization** (Viral + Revenue)
+   - Shareable audio links for organic growth
+   - Voice-enabled Guided Researcher expansion
+   - Unified credit system with clear pricing tiers
+   - Natural upsell path to Pro tier
+
+4. **Operational Excellence**
+   - Request coalescing eliminates duplicate API calls
+   - Multi-tier caching (browser/CDN/server) for instant loads
+   - Auto-retry eliminates manual intervention
+   - Comprehensive analytics for data-driven optimization
+
+### Projected Impact:
+
+- **Cost Reduction:** 75-85% lower API costs (vs. current model)
+- **Storage Savings:** 50-70% reduction with voice-first approach
+- **User Experience:** Instant loads + voice choice + shareable links
+- **Revenue:** Multiple monetization levers (credits, voice upgrades)
+- **Reliability:** 99%+ generation success rate with auto-retry
+- **Growth:** Viral sharing mechanism built-in
+
+### Implementation Approach:
+
+**Phased deployment** starting with Quick Wins (3-4 days) for immediate impact, then Phase 1-2 foundation work (2 weeks), then new features (Phases 3-4), then optimization (Phases 5-7).
+
+**Recommended Next Step:**
+1. Start with Phase 1 Quick Wins (Request Coalescing + Analytics) for immediate visibility into current system
+2. Proceed to Phase 2 (Scheduled Generation + Auto-Retry) for foundation
+3. Then Phase 3 (Voice-First Architecture) for cost savings
+4. Then Phase 4 (Shareable Links + Credit System) for growth and revenue
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 2.0
 **Last Updated:** January 31, 2026
 **Status:** Ready for Implementation
+**Strategic Shift:** Voice-First Content + Voice Layer Separation with Growth Features
