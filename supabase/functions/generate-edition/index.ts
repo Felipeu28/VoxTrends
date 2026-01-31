@@ -666,7 +666,7 @@ serve(async (req) => {
 
       if (cachedEdition) {
         const cacheTime = Date.now() - startTime;
-        console.log('✅ Returning cached edition (script-ready)');
+        console.log('✅ Found cached edition');
 
         // Record cache hit asynchronously
         recordCacheHit(supabaseClient, cacheKey, cacheTime).catch((err) =>
@@ -685,7 +685,35 @@ serve(async (req) => {
           .select('voice_id')
           .eq('edition_id', cachedEdition.id);
 
+        // ==================== PHASE 3: HANDLE AUDIO GENERATION FOR CACHED EDITIONS ====================
+        let audioUrl = null;
+
+        if (generateAudio && cachedEdition.script) {
+          try {
+            console.log('🎙️ Generating audio for cached edition with voice profile:', voiceId);
+            const gemini = new GeminiService(Deno.env.get('GEMINI_API_KEY') ?? '');
+            const audioResult = await gemini.generateAudio(
+              cachedEdition.script,
+              voiceProfile.voices.lead,
+              voiceProfile.voices.expert,
+              voiceProfile.hosts.lead,
+              voiceProfile.hosts.expert
+            );
+
+            if (audioResult.data) {
+              audioUrl = `data:audio/wav;base64,${audioResult.data}`;
+              console.log('✅ Audio generated successfully for cached edition');
+            } else {
+              console.warn('⚠️ Audio generation returned no data:', audioResult.error);
+            }
+          } catch (audioError: any) {
+            console.error('❌ Audio generation error for cached edition:', audioError);
+            // Don't fail the whole request if audio generation fails
+          }
+        }
+
         // ==================== PHASE 3: RETURN CACHED SCRIPT-READY EDITION ====================
+        console.log('✅ Returning cached edition (script-ready)' + (audioUrl ? ' with audio' : ''));
         return new Response(
           JSON.stringify({
             data: {
@@ -695,11 +723,14 @@ serve(async (req) => {
               imageUrl: cachedEdition.image_url,
               links: cachedEdition.grounding_links,
               flashSummary: cachedEdition.flash_summary,
+              audio: audioUrl,
               cached: true,
               scriptReady: true,
               voiceVariantsAvailable: ['originals', 'deep-divers', 'trendspotters'],
               voiceVariantsGeneratedCount: variants?.length || 0,
-              message: 'Content and script ready. Select a voice profile to generate audio.',
+              message: audioUrl
+                ? 'Content and script ready with audio!'
+                : 'Content and script ready. Select a voice profile to generate audio.',
             },
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
