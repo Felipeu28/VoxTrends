@@ -1451,100 +1451,106 @@ const App: React.FC = () => {
               {/* Main Broadcast Section */}
               <div className="lg:col-span-8 space-y-8">
                 <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
-                  <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12 relative z-10">
-                    <div className="animate-in slide-in-from-top duration-700">
-                      <div className="flex items-center gap-2 mb-3 flex-wrap">
-                        <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
-                          🌎 {region}
-                        </span>
-                        <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
-                          🗣️ {language}
-                        </span>
-                        {editionVariants > 1 && (
-                          <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold text-zinc-500">
-                            {editionVariants} version{editionVariants > 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-violet-500 text-xs md:text-[10px] font-bold md:font-black uppercase tracking-wide md:tracking-widest mb-2 block">
-                        {activeTab} Edition
+                  {/* Header: Title and Edition Info */}
+                  <div className="animate-in slide-in-from-top duration-700">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
+                        🌎 {region}
                       </span>
-                      <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold tracking-tight">Today's Briefing</h3>
-                    </div>
-
-                    <div className="flex gap-4 items-center">
-                      {currentDaily ? (
-                        <>
-                          <div className="flex flex-col gap-2">
-                            <button
-                              onClick={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
-                              className="px-8 py-3 bg-emerald-600 border border-emerald-700 rounded-xl text-sm font-black tracking-wide text-white hover:bg-emerald-700 transition-all shadow-lg"
-                            >
-                              💾 SAVE
-                            </button>
-                            <button
-                              onClick={() => handleGenerateDaily(activeTab, true)}
-                              disabled={loading}
-                              className="px-8 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold tracking-wide text-violet-400 hover:border-violet-600 transition-all disabled:opacity-50"
-                            >
-                              🔄 Regenerate
-                            </button>
-                          </div>
-
-                          {/* Phase 3: Show VoiceSelector if scriptReady but no audio yet */}
-                          {currentDaily.scriptReady && !currentDaily.audio ? (
-                            <div className="flex-1">
-                              <VoiceSelector
-                                editionId={currentDaily.edition_id || ''}
-                                isScriptReady={true}
-                                editionType={activeTab as 'Morning' | 'Midday' | 'Evening'}
-                                region={region}
-                                language={language}
-                                onAudioGenerated={(voiceId, audioUrl) => {
-                                  // Update currentDaily with generated audio
-                                  const updatedDaily = { ...currentDaily, audio: audioUrl };
-                                  const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
-                                  setDailyEditions(updatedEditions);
-                                  voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <AudioPlayer
-                              audioData={currentDaily.audio}
-                              clipId={`edition-${activeTab}`}
-                              isPlaying={playingClipId === `edition-${activeTab}`}
-                              onPlayPause={() => {
-                                if (playingClipId === `edition-${activeTab}`) {
-                                  setPlayingClipId(null);
-                                } else {
-                                  setPlayingClipId(`edition-${activeTab}`);
-                                }
-                              }}
-                            />
-                          )}
-                        </>
-                      ) : (
-                        <div className="flex flex-col items-end gap-3">
-                          {Object.keys(dailyEditions).some(k => k.startsWith(activeTab)) && (
-                            <p className="text-xs text-zinc-500 text-right max-w-xs">
-                              ðŸ’¡ Changed settings? Generate a new version for {region} in {language}
-                            </p>
-                          )}
-                          <button
-                            onClick={() => handleGenerateDaily(activeTab)}
-                            disabled={loading}
-                            className="px-8 md:px-10 py-4 md:py-5 bg-white text-black font-black rounded-3xl hover:bg-violet-600 hover:text-white transition-all shadow-xl disabled:opacity-50"
-                          >
-                            {loading ? 'SYNCING...' : `${t.sync} ${activeTab.toUpperCase()}`}
-                          </button>
-                        </div>
+                      <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
+                        🗣️ {language}
+                      </span>
+                      {editionVariants > 1 && (
+                        <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold text-zinc-500">
+                          {editionVariants} version{editionVariants > 1 ? 's' : ''}
+                        </span>
                       )}
                     </div>
+                    <span className="text-violet-500 text-xs md:text-[10px] font-bold md:font-black uppercase tracking-wide md:tracking-widest mb-2 block">
+                      {activeTab} Edition
+                    </span>
+                    <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold tracking-tight">Today's Briefing</h3>
                   </div>
 
+                  {/* Save and Regenerate Buttons */}
                   {currentDaily && (
-                    <div className="space-y-10 animate-in fade-in duration-1000">
+                    <div className="flex gap-3 mt-8">
+                      <button
+                        onClick={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
+                        className="px-6 py-3 bg-emerald-600 border border-emerald-700 rounded-xl text-sm font-black tracking-wide text-white hover:bg-emerald-700 transition-all shadow-lg"
+                      >
+                        💾 SAVE
+                      </button>
+                      <button
+                        onClick={() => handleGenerateDaily(activeTab, true)}
+                        disabled={loading}
+                        className="px-6 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-bold tracking-wide text-violet-400 hover:border-violet-600 transition-all disabled:opacity-50"
+                      >
+                        🔄 Regenerate
+                      </button>
+                    </div>
+                  )}
+                </section>
+
+                {/* Phase 3: Voice Selector - Full Width Below Header */}
+                {currentDaily && currentDaily.scriptReady && !currentDaily.audio && (
+                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
+                    <VoiceSelector
+                      editionId={currentDaily.edition_id || ''}
+                      isScriptReady={true}
+                      editionType={activeTab as 'Morning' | 'Midday' | 'Evening'}
+                      region={region}
+                      language={language}
+                      onAudioGenerated={(voiceId, audioUrl) => {
+                        // Update currentDaily with generated audio
+                        const updatedDaily = { ...currentDaily, audio: audioUrl };
+                        const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
+                        setDailyEditions(updatedEditions);
+                        voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+                      }}
+                    />
+                  </section>
+                )}
+
+                {/* Audio Player - Show if audio exists */}
+                {currentDaily && currentDaily.audio && (
+                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
+                    <AudioPlayer
+                      audioData={currentDaily.audio}
+                      clipId={`edition-${activeTab}`}
+                      isPlaying={playingClipId === `edition-${activeTab}`}
+                      onPlayPause={() => {
+                        if (playingClipId === `edition-${activeTab}`) {
+                          setPlayingClipId(null);
+                        } else {
+                          setPlayingClipId(`edition-${activeTab}`);
+                        }
+                      }}
+                    />
+                  </section>
+                )}
+
+                {/* No Current Daily - Show Generate Button */}
+                {!currentDaily && (
+                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden flex flex-col items-center justify-center gap-6 py-20">
+                    {Object.keys(dailyEditions).some(k => k.startsWith(activeTab)) && (
+                      <p className="text-sm text-zinc-500 text-center max-w-xs">
+                        💡 Changed settings? Generate a new version for {region} in {language}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => handleGenerateDaily(activeTab)}
+                      disabled={loading}
+                      className="px-10 py-4 bg-white text-black font-black rounded-2xl hover:bg-violet-600 hover:text-white transition-all shadow-xl disabled:opacity-50"
+                    >
+                      {loading ? 'SYNCING...' : `${t.sync} ${activeTab.toUpperCase()}`}
+                    </button>
+                  </section>
+                )}
+
+                {/* Content: Image, Text, Links, Chat */}
+                {currentDaily && (
+                  <div className="space-y-10 animate-in fade-in duration-1000">
                       <div className="w-full aspect-video rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl relative group">
                         {currentDaily.imageUrl && (
                           <img
@@ -1627,13 +1633,12 @@ const App: React.FC = () => {
                     </div>
                   )}
 
-                  {!currentDaily && !loading && (
-                    <div className="py-24 flex flex-col items-center justify-center text-zinc-800 opacity-20">
-                      <ICONS.Podcast className="w-20 h-20 mb-4" />
-                      <p className="font-serif italic text-lg">Broadcast offline. Sync to begin.</p>
-                    </div>
-                  )}
-                </section>
+                {!currentDaily && !loading && (
+                  <div className="py-24 flex flex-col items-center justify-center text-zinc-800 opacity-20">
+                    <ICONS.Podcast className="w-20 h-20 mb-4" />
+                    <p className="font-serif italic text-lg">Broadcast offline. Sync to begin.</p>
+                  </div>
+                )}
               </div>
 
               {/* Research Panel - DISABLED: Requires conduct-research Edge Function deployment */}
