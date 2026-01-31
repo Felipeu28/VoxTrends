@@ -2,8 +2,20 @@
 -- These jobs pre-generate editions at scheduled times and auto-retry failures
 -- Run these commands in Supabase SQL Editor
 
--- Note: pg_cron must be enabled in your Supabase project
--- You may need to contact Supabase support to enable it if not already enabled
+-- IMPORTANT: pg_cron must be enabled in your Supabase project
+-- If you get "schema cron does not exist" error:
+-- 1. Go to Supabase Dashboard
+-- 2. Click on your project
+-- 3. Go to SQL Editor
+-- 4. Check "Extensions" section - search for "pg_cron"
+-- 5. If not enabled, click to enable it (or contact Supabase support)
+-- 6. Then come back and run these cron job commands
+
+-- Configuration:
+-- Regions: us, global, colombia, venezuela, europe, asia (6 total)
+-- Languages: en, es (English, Spanish only - 2 total)
+-- Editions: Morning, Midday, Evening (3 total)
+-- Total combinations per run: 6 × 2 = 12 combinations per edition × 3 editions = 36 total
 
 -- ==================== MORNING EDITION (6:00 AM UTC) ====================
 -- This runs every day at 6:00 AM UTC to pre-generate Morning editions
@@ -19,8 +31,8 @@ SELECT cron.schedule(
       ),
       jsonb_build_object(
         'editionType', 'Morning',
-        'regions', ARRAY['us', 'uk', 'eu', 'asia'],
-        'languages', ARRAY['en', 'es', 'fr', 'de']
+        'regions', ARRAY['us', 'global', 'colombia', 'venezuela', 'europe', 'asia'],
+        'languages', ARRAY['en', 'es']
       ),
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
@@ -45,8 +57,8 @@ SELECT cron.schedule(
       ),
       jsonb_build_object(
         'editionType', 'Midday',
-        'regions', ARRAY['us', 'uk', 'eu', 'asia'],
-        'languages', ARRAY['en', 'es', 'fr', 'de']
+        'regions', ARRAY['us', 'global', 'colombia', 'venezuela', 'europe', 'asia'],
+        'languages', ARRAY['en', 'es']
       ),
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
@@ -71,8 +83,8 @@ SELECT cron.schedule(
       ),
       jsonb_build_object(
         'editionType', 'Evening',
-        'regions', ARRAY['us', 'uk', 'eu', 'asia'],
-        'languages', ARRAY['en', 'es', 'fr', 'de']
+        'regions', ARRAY['us', 'global', 'colombia', 'venezuela', 'europe', 'asia'],
+        'languages', ARRAY['en', 'es']
       ),
       headers := jsonb_build_object(
         'Content-Type', 'application/json',

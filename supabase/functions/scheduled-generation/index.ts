@@ -15,8 +15,8 @@ function handleCors(req: Request) {
 }
 
 // ==================== CONFIGURATION ====================
-const REGIONS = ['us', 'uk', 'eu', 'asia'];
-const LANGUAGES = ['en', 'es', 'fr', 'de'];
+const REGIONS = ['us', 'global', 'colombia', 'venezuela', 'europe', 'asia'];
+const LANGUAGES = ['en', 'es'];  // English, Spanish only (Portuguese commented out for future)
 const EDITIONS = ['Morning', 'Midday', 'Evening'];
 const GENERATE_EDITION_URL = `${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-edition`;
 
