@@ -37,12 +37,18 @@ const VOICE_PROFILES: VoiceProfile[] = [
 interface VoiceSelectorProps {
   editionId: string;
   isScriptReady: boolean;
+  editionType: 'Morning' | 'Midday' | 'Evening';
+  region: string;
+  language: string;
   onAudioGenerated?: (voiceId: string, audioUrl: string) => void;
 }
 
 export default function VoiceSelector({
   editionId,
   isScriptReady,
+  editionType,
+  region,
+  language,
   onAudioGenerated,
 }: VoiceSelectorProps) {
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null);
@@ -57,13 +63,12 @@ export default function VoiceSelector({
     try {
       // Call generate-edition with generateAudio flag to generate audio in one call
       const result = await backend.generateEdition(
-        'Morning',  // These aren't used since we're regenerating, but required for API
-        'Global',
-        'English',
-        false,      // forceRefresh
-        voiceId,    // voiceId to use for this variant
-        // New parameter - tell generate-edition to generate audio
-        true        // generateAudio flag
+        editionType,  // Use actual edition type
+        region,       // Use actual region
+        language,     // Use actual language
+        false,        // forceRefresh
+        voiceId,      // voiceId to use for this variant
+        true          // generateAudio flag
       );
 
       const audioUrl = result.data?.audio;
