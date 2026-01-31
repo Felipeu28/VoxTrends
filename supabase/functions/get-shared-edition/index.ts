@@ -5,6 +5,12 @@ const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+};
+
 // Hash IP address for privacy (no PII stored)
 function hashIP(ip: string): string {
   // Using Deno's crypto API for hashing
@@ -16,6 +22,14 @@ function hashIP(ip: string): string {
 }
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      status: 200,
+      headers: corsHeaders,
+    });
+  }
+
   try {
     const url = new URL(req.url);
     const shareToken = url.searchParams.get("share_token");
@@ -23,7 +37,7 @@ Deno.serve(async (req: Request) => {
     if (!shareToken) {
       return new Response(
         JSON.stringify({ error: "share_token is required" }),
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -38,14 +52,14 @@ Deno.serve(async (req: Request) => {
     if (shareLinkError || !shareLink) {
       return new Response(
         JSON.stringify({ error: "Share link not found" }),
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       );
     }
 
     if (new Date(shareLink.expires_at) < now) {
       return new Response(
         JSON.stringify({ error: "Share link expired" }),
-        { status: 410 }  // Gone
+        { status: 410, headers: corsHeaders }  // Gone
       );
     }
 
@@ -59,7 +73,7 @@ Deno.serve(async (req: Request) => {
     if (editionError || !edition) {
       return new Response(
         JSON.stringify({ error: "Edition not found" }),
-        { status: 404 }
+        { status: 404, headers: corsHeaders }
       );
     }
 
@@ -124,7 +138,7 @@ Deno.serve(async (req: Request) => {
       }),
       {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   } catch (error) {
@@ -134,7 +148,7 @@ Deno.serve(async (req: Request) => {
         error: "Failed to retrieve shared edition",
         message: error.message,
       }),
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 });
