@@ -835,22 +835,23 @@ serve(async (req) => {
     const scheduledDeletionAt = new Date();
     scheduledDeletionAt.setHours(scheduledDeletionAt.getHours() + tierRetentionHours);
 
-    await supabaseClient
-      .from('content_expiration_schedule')
-      .upsert({
-        edition_id: editionData.id,
-        user_id: user.id,
-        tier: userPlan,
-        scheduled_deletion_at: scheduledDeletionAt.toISOString(),
-      }, {
-        onConflict: 'edition_id,user_id'
-      })
-      .catch((err) => {
-        console.warn(`⚠️ Failed to schedule content deletion: ${err}`);
-        // Non-blocking error - don't fail the whole function
-      });
+    try {
+      await supabaseClient
+        .from('content_expiration_schedule')
+        .upsert({
+          edition_id: editionData.id,
+          user_id: user.id,
+          tier: userPlan,
+          scheduled_deletion_at: scheduledDeletionAt.toISOString(),
+        }, {
+          onConflict: 'edition_id,user_id'
+        });
 
-    console.log(`📅 Content scheduled for deletion in ${tierRetentionHours} hours (${userPlan} tier)`);
+      console.log(`📅 Content scheduled for deletion in ${tierRetentionHours} hours (${userPlan} tier)`);
+    } catch (err) {
+      console.warn(`⚠️ Failed to schedule content deletion: ${err}`);
+      // Non-blocking error - don't fail the whole function
+    }
 
     // Increment usage
     await supabaseClient.rpc('increment_daily_usage', {
