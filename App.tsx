@@ -1636,7 +1636,8 @@ const App: React.FC = () => {
                 </section>
               </div>
 
-              {/* Research Panel */}
+              {/* Research Panel - DISABLED: Requires conduct-research Edge Function deployment */}
+              {false ? (
               <div id="research-section" className="lg:col-span-4 space-y-8">
                 <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-8 md:p-10">
                   <h3 className="text-xl font-bold mb-8 flex items-center gap-3">
@@ -1700,6 +1701,7 @@ const App: React.FC = () => {
                   )}
                 </section>
               </div>
+              ) : null}
             </div>
           )}
 
