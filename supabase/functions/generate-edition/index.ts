@@ -335,6 +335,159 @@ class GeminiService {
   }
 }
 
+// ==================== PHASE 1: REQUEST COALESCING ====================
+const inFlightGenerations = new Map<string, Promise<any>>();
+
+function getCacheKey(editionType: string, region: string, language: string): string {
+  const today = new Date().toISOString().split('T')[0];
+  return `${editionType}-${region}-${language}-${today}`;
+}
+
+async function recordCacheHit(supabaseClient: any, cacheKey: string, generationTimeMs: number) {
+  try {
+    const { data: existing } = await supabaseClient
+      .from('cache_analytics')
+      .select('*')
+      .eq('cache_key', cacheKey)
+      .single();
+
+    if (existing) {
+      const newHits = existing.cache_hits + 1;
+      const newTotal = existing.total_requests + 1;
+      const newHitRate = newHits / newTotal;
+
+      await supabaseClient
+        .from('cache_analytics')
+        .update({
+          cache_hits: newHits,
+          total_requests: newTotal,
+          hit_rate: newHitRate,
+          cost_saved_by_cache: (existing.cost_saved_by_cache || 0) + 0.05,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('cache_key', cacheKey);
+    } else {
+      await supabaseClient
+        .from('cache_analytics')
+        .insert({
+          cache_key: cacheKey,
+          cache_hits: 1,
+          cache_misses: 0,
+          total_requests: 1,
+          hit_rate: 1.0,
+          cost_saved_by_cache: 0.05,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+    }
+
+    console.log(`📊 Cache hit recorded: ${cacheKey}`);
+  } catch (error) {
+    console.warn(`⚠️ Failed to record cache hit: ${error}`);
+  }
+}
+
+async function recordCacheMiss(supabaseClient: any, cacheKey: string, generationTimeMs: number) {
+  try {
+    const { data: existing } = await supabaseClient
+      .from('cache_analytics')
+      .select('*')
+      .eq('cache_key', cacheKey)
+      .single();
+
+    const costPerGeneration = 0.50;
+
+    if (existing) {
+      const newMisses = existing.cache_misses + 1;
+      const newTotal = existing.total_requests + 1;
+      const newHitRate = existing.cache_hits / newTotal;
+
+      await supabaseClient
+        .from('cache_analytics')
+        .update({
+          cache_misses: newMisses,
+          total_requests: newTotal,
+          hit_rate: newHitRate,
+          generation_time_ms: generationTimeMs,
+          cost_per_generation: costPerGeneration,
+          total_cost: (existing.total_cost || 0) + costPerGeneration,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('cache_key', cacheKey);
+    } else {
+      await supabaseClient
+        .from('cache_analytics')
+        .insert({
+          cache_key: cacheKey,
+          cache_hits: 0,
+          cache_misses: 1,
+          total_requests: 1,
+          hit_rate: 0,
+          generation_time_ms: generationTimeMs,
+          cost_per_generation: costPerGeneration,
+          total_cost: costPerGeneration,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+    }
+
+    console.log(`📊 Cache miss recorded: ${cacheKey} (${generationTimeMs}ms)`);
+  } catch (error) {
+    console.warn(`⚠️ Failed to record cache miss: ${error}`);
+  }
+}
+
+// ==================== PHASE 1: REFRESH THROTTLING ====================
+async function isRefreshThrottled(supabaseClient: any, userId: string, editionKey: string): Promise<{ throttled: boolean; minutesUntilRefresh?: number }> {
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const { data: recentRefresh, error } = await supabaseClient
+      .from('user_refresh_history')
+      .select('force_refresh_at')
+      .eq('user_id', userId)
+      .eq('edition_key', editionKey)
+      .gte('force_refresh_at', oneHourAgo)
+      .order('force_refresh_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && error.code === 'PGRST116') {
+      return { throttled: false };
+    }
+
+    if (recentRefresh) {
+      const lastRefresh = new Date(recentRefresh.force_refresh_at);
+      const nextAllowedRefresh = new Date(lastRefresh.getTime() + 60 * 60 * 1000);
+      const minutesUntilRefresh = Math.ceil((nextAllowedRefresh.getTime() - Date.now()) / (60 * 1000));
+
+      console.log(`🔒 Refresh throttled for ${editionKey}: ${minutesUntilRefresh} minutes remaining`);
+      return { throttled: true, minutesUntilRefresh };
+    }
+
+    return { throttled: false };
+  } catch (error) {
+    console.warn(`⚠️ Error checking refresh throttle: ${error}`);
+    return { throttled: false };
+  }
+}
+
+async function recordRefresh(supabaseClient: any, userId: string, editionKey: string) {
+  try {
+    await supabaseClient
+      .from('user_refresh_history')
+      .insert({
+        user_id: userId,
+        edition_key: editionKey,
+        force_refresh_at: new Date().toISOString(),
+      });
+
+    console.log(`📝 Refresh recorded for ${editionKey}`);
+  } catch (error) {
+    console.warn(`⚠️ Failed to record refresh: ${error}`);
+  }
+}
+
 // ==================== MAIN FUNCTION ====================
 console.log('Generate Edition Function Started');
 
@@ -342,6 +495,8 @@ serve(async (req) => {
   // Handle CORS
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
+
+  const startTime = Date.now();
 
   try {
     // Check if the request body is valid JSON
@@ -452,6 +607,47 @@ serve(async (req) => {
       );
     }
 
+    // ==================== PHASE 1: REQUEST COALESCING ====================
+    const cacheKey = getCacheKey(editionType, region, language);
+
+    // Check if this exact request is already being processed
+    if (inFlightGenerations.has(cacheKey) && !forceRefresh) {
+      console.log(`🔗 Request coalesced: Waiting for in-flight ${cacheKey}`);
+      try {
+        const coalescedResult = await inFlightGenerations.get(cacheKey);
+        return new Response(
+          JSON.stringify({
+            data: coalescedResult,
+            coalesced: true,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error) {
+        console.warn(`⚠️ Coalesced request failed: ${error}`);
+        // Fall through to generate new one
+      }
+    }
+
+    // ==================== PHASE 1: REFRESH THROTTLING ====================
+    if (forceRefresh) {
+      const { throttled, minutesUntilRefresh } = await isRefreshThrottled(supabaseClient, user.id, cacheKey);
+
+      if (throttled) {
+        return new Response(
+          JSON.stringify({
+            error: `Refresh throttled. Please wait ${minutesUntilRefresh} minutes before refreshing again.`,
+            throttled: true,
+            minutesUntilRefresh,
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Record this refresh
+      await recordRefresh(supabaseClient, user.id, cacheKey);
+      console.log('🚀 FORCE REFRESH REQUESTED: Bypassing Supabase cache and generating fresh content');
+    }
+
     // Check for cached edition (SKIP if forceRefresh is true)
     if (!forceRefresh) {
       console.log('Checking for cached edition for:', { editionType, region, language, today });
@@ -466,7 +662,13 @@ serve(async (req) => {
         .single();
 
       if (cachedEdition) {
+        const cacheTime = Date.now() - startTime;
         console.log('✅ Returning cached edition');
+
+        // Record cache hit asynchronously
+        recordCacheHit(supabaseClient, cacheKey, cacheTime).catch((err) =>
+          console.warn(`⚠️ Failed to record cache hit: ${err}`)
+        );
 
         // Still increment usage for cached editions
         await supabaseClient.rpc('increment_daily_usage', {
@@ -489,8 +691,6 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-    } else {
-      console.log('🚀 FORCE REFRESH REQUESTED: Bypassing Supabase cache and generating fresh content');
     }
 
     console.log('Generating new edition...');
@@ -641,6 +841,12 @@ serve(async (req) => {
     });
 
     console.log('Analytics logged');
+
+    // ==================== PHASE 1: RECORD CACHE MISS ====================
+    const generationTime = Date.now() - startTime;
+    recordCacheMiss(supabaseClient, cacheKey, generationTime).catch((err) =>
+      console.warn(`⚠️ Failed to record cache miss: ${err}`)
+    );
 
     return new Response(
       JSON.stringify({
