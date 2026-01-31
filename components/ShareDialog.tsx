@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, X, Link as LinkIcon, Loader } from 'lucide-react';
+import { backend } from '../services/backend';
 
 interface ShareLink {
   id: string;
@@ -42,17 +42,8 @@ export default function ShareDialog({
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(
-        `/api/share-edition?edition_id=${editionId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-          },
-        }
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setShareLinks(data.shares || []);
+      const links = await backend.getShareLinks(editionId);
+      setShareLinks(links);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to load share links'
@@ -66,17 +57,8 @@ export default function ShareDialog({
     setIsCreating(true);
     setError(null);
     try {
-      const response = await fetch('/api/share-edition', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-        },
-        body: JSON.stringify({ edition_id: editionId }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setShareLinks([data, ...shareLinks]);
+      const newLink = await backend.createShareLink(editionId);
+      setShareLinks([newLink, ...shareLinks]);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to create share link'
@@ -89,16 +71,7 @@ export default function ShareDialog({
   const revokeShareLink = async (shareId: string) => {
     setError(null);
     try {
-      const response = await fetch(`/api/share-edition?share_id=${shareId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-        },
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error);
-      }
+      await backend.revokeShareLink(shareId);
       setShareLinks(shareLinks.filter((link) => link.id !== shareId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to revoke share');

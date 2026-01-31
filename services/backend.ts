@@ -117,6 +117,80 @@ export class BackendService {
     if (error) throw error;
     return data;
   }
+
+  /**
+   * Generate audio for a voice variant (Phase 3)
+   */
+  async generateVoiceVariant(editionId: string, voiceId: string) {
+    return this.callFunction('generate-voice-variant', {
+      edition_id: editionId,
+      voice_id: voiceId,
+    });
+  }
+
+  /**
+   * Get share links for an edition (Phase 4)
+   */
+  async getShareLinks(editionId: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const url = `${FUNCTIONS_URL}/share-edition?edition_id=${editionId}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to get share links');
+    return data.shares || [];
+  }
+
+  /**
+   * Create a share link for an edition (Phase 4)
+   */
+  async createShareLink(editionId: string) {
+    return this.callFunction('share-edition', {
+      edition_id: editionId,
+    });
+  }
+
+  /**
+   * Revoke a share link (Phase 4)
+   */
+  async revokeShareLink(shareId: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const url = `${FUNCTIONS_URL}/share-edition?share_id=${shareId}`;
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Failed to revoke share link');
+    }
+  }
+
+  /**
+   * Get a shared edition by token (Phase 4 - public access)
+   */
+  async getSharedEdition(shareToken: string) {
+    const url = `${FUNCTIONS_URL}/get-shared-edition?share_token=${shareToken}`;
+    const response = await fetch(url, {
+      method: 'GET',
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to get shared edition');
+    return data.data;
+  }
 }
 
 export const backend = new BackendService();
