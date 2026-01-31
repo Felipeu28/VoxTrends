@@ -865,7 +865,7 @@ serve(async (req) => {
     await supabaseClient.from('usage_analytics').insert({
       user_id: user.id,
       action_type: 'generate_edition',
-      metadata: { editionType, region, language, audioError },
+      metadata: { editionType, region, language, voiceId },
       cost_estimate: 0.15,
     });
 
