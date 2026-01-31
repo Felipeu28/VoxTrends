@@ -1497,6 +1497,9 @@ const App: React.FC = () => {
                               <VoiceSelector
                                 editionId={currentDaily.edition_id || ''}
                                 isScriptReady={true}
+                                editionType={activeTab as 'Morning' | 'Midday' | 'Evening'}
+                                region={region}
+                                language={language}
                                 onAudioGenerated={(voiceId, audioUrl) => {
                                   // Update currentDaily with generated audio
                                   const updatedDaily = { ...currentDaily, audio: audioUrl };
