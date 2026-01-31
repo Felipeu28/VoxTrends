@@ -67,13 +67,15 @@ export class BackendService {
     editionType: 'Morning' | 'Midday' | 'Evening',
     region: string,
     language: string,
-    forceRefresh: boolean = false
+    forceRefresh: boolean = false,
+    voiceId: string = 'originals'
   ) {
     return this.callFunction('generate-edition', {
       editionType,
       region,
       language,
       forceRefresh,
+      voiceId,
     });
   }
 
