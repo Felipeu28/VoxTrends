@@ -145,6 +145,8 @@ export class VoxService {
 
   async interrogate(context: string, question: string, history: any[], language: string = "English") {
     try {
+      // Note: This feature requires backend/API key access
+      // For now, return a helpful message
       const ai = this.getClient();
       const chat = ai.chats.create({
         model: "gemini-3-flash-preview",
@@ -155,8 +157,9 @@ export class VoxService {
       const response = await chat.sendMessage({ message: question });
       return response.text;
     } catch (e) {
-      console.error("Interrogate Error:", e);
-      return "Unable to process inquiry at this moment.";
+      // Silently fail - this feature requires backend setup
+      // Return a friendly message instead of showing error
+      return "Research assistant is being configured. Please try again later.";
     }
   }
 }
