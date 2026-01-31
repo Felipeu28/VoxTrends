@@ -1048,27 +1048,32 @@ User Plans:
 │  └─ 0 credits/month
 │  └─ Hook: "Upgrade to download favorite editions"
 │
-├─ Pro ($9.99/month or similar)
-│  ├─ Unlimited editions/day
-│  ├─ All voice variants (each 1 credit, one-time unlock)
-│  ├─ Guided Researcher with voice (2 credits/section)
-│  ├─ DOWNLOAD & ARCHIVE capability (store unlimited editions)
-│  ├─ OFFLINE playback of downloaded editions
-│  └─ 100 credits/month to spend on:
-│      ├─ Voice variant unlocks (1 credit per voice, one-time)
-│      ├─ Guided Researcher voice narration (2 credits/section)
-│      └─ Premium features if added
+├─ Pro ($5.99/month)
+│  ├─ 3 editions/day (Morning/Midday/Evening) + future deep-dives
+│  ├─ ALL voice variants (unlock with 1 credit each, one-time)
+│  ├─ Guided Researcher with voice narration
+│  ├─ DOWNLOAD & ARCHIVE (store unlimited editions)
+│  ├─ OFFLINE playback (via Service Worker)
+│  ├─ 1GB archive storage
+│  ├─ Priority support
+│  └─ 100 credits/month for:
+│      ├─ Voice unlocks (1 credit per new voice)
+│      └─ Researcher narration (2 credits per section)
 │
-└─ Enterprise
+└─ Studio ($49/month)
    ├─ Everything Pro
-   ├─ Custom voice profiles
+   ├─ Custom voice profiles (your own voice)
    ├─ Unlimited credits/month
-   └─ Dedicated features/support
+   ├─ 10GB archive storage
+   ├─ Podcast publishing (export as podcast feed)
+   ├─ API access (build on VoxTrends)
+   └─ Dedicated support
 ```
 
 **Key Distinction:**
-- **Free tier:** Ephemeral (content gone after 24h) → drives daily engagement
-- **Pro tier:** Persistent (download & keep forever) → natural upgrade incentive
+- **Free tier:** Ephemeral (content gone after 24h) → drives daily engagement + viral sharing
+- **Pro tier:** Persistent (download & keep forever) + enhanced voices + research narration → natural upgrade incentive
+- **Studio tier:** Creator-focused (custom voices + publishing + API) → professional/business users
 
 **Database Updates:**
 ```sql
@@ -2391,7 +2396,224 @@ Option D: Hybrid
 
 ---
 
-## Conclusion
+## Part 11: Landing Page & Brand Vision
+
+### Matrix-Inspired AI Agent Landing Experience
+
+**Concept:** First-time visitors land on a tech-forward, immersive experience that showcases VoxTrends' AI-powered news intelligence.
+
+**Design Aesthetic:**
+- **Color Palette:** Pure black (#000000) background, electric green (#00FF00) accent text/UI
+- **Typography:** Monospace fonts (Courier New, IBM Plex Mono) for tech authenticity
+- **Atmosphere:** Clean, minimalist, high-tech (inspired by Matrix aesthetic but modern)
+- **Animation:** Subtle but compelling (green text appearing, digital artifacts, pulsing elements)
+
+**Hero Section: AI Agent Face**
+
+```
+Interactive Element (Center Screen):
+┌─────────────────────────────────────┐
+│                                     │
+│    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓       │
+│    ▓░░░░░░░░░░░░░░░░░░░░░▓       │
+│    ▓░  [VOXTRENDS AI]      ░▓       │
+│    ▓░                      ░▓       │
+│    ▓░  🟢 ⬤ ⬤ 🟢           ░▓       │  (AI eyes = green circles)
+│    ▓░                      ░▓       │
+│    ▓░  ▔ ▔ ▔ ▔ ▔ ▔ ▔       ░▓       │  (animated mouth shape)
+│    ▓░                      ░▓       │
+│    ▓░░░░░░░░░░░░░░░░░░░░░▓       │
+│    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓       │
+│                                     │
+│       [TAP TO HEAR TODAY'S NEWS]    │  (Animated button)
+│       _____________________         │
+│                                     │
+└─────────────────────────────────────┘
+
+Technical Details:
+├─ Face made of: SVG path + animated CSS
+├─ Green numbers/code scrolling in background (faint)
+├─ Eyes "blink" and follow cursor (interactive)
+├─ Mouth animates when "speaking"
+└─ Pulsing glow around face
+```
+
+**Interactive Behavior (Click/Tap):**
+
+```
+User clicks on AI face:
+  ↓
+Audio starts playing (Morning Edition or Random)
+  ├─ Animated mouth syncs to audio (green bars pulsing)
+  ├─ Background code scrolls faster
+  ├─ Eyes track to "speaking" state
+  └─ Real-time transcription displays (green text)
+  ↓
+After ~30 seconds of playback:
+  ├─ "Love this? Create account to get daily editions"
+  ├─ CTA button animates: [GET FRESH NEWS]
+  └─ Smooth transition to signup modal
+```
+
+**Tagline & Value Prop (Subtitle):**
+
+```
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│  Fresh. Non-biased. Real-time News Intelligence   │
+│                                                    │
+│  AI-powered news briefings delivered daily        │
+│  Multiple perspectives. Your favorite voice.      │
+│                                                    │
+│  [TAP THE AI → HEAR TODAY'S NEWS]                 │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+**Podcast-Like Interaction Flow:**
+
+```
+Landing Page:
+├─ User sees: Black screen + green AI face
+├─ Text fades in: "Fresh. Non-biased. Real-time News Intelligence"
+├─ Cursor hovers over AI face
+└─ Face "wakes up" (eyes glow brighter)
+
+User Clicks:
+├─ Audio starts (Morning/Midday/Evening or featured edition)
+├─ Mouth animates to speech
+├─ Green waveforms visualize audio in background
+├─ Real-time transcription scrolls (optional, can toggle)
+├─ User can pause/resume/skip
+└─ After ~30 seconds:
+   ├─ "Like this? Create an account to get:"
+   ├─   ✓ Fresh daily news at 6am, 12pm, 6pm
+   ├─   ✓ Multiple voices (Original, Deep Diver, Trendsetter)
+   ├─   ✓ Download & save favorites (Pro)
+   └─   [CREATE FREE ACCOUNT]
+
+If User Skips/Closes:
+└─ "Check back daily for fresh news"
+   └─ [CREATE ACCOUNT] or [LEARN MORE]
+```
+
+**Design Components:**
+
+1. **AI Face Animation (SVG + Canvas):**
+   - Green digital face made of lines/nodes
+   - Eyes follow cursor (subtle parallax)
+   - Mouth shapes match speech (phoneme detection)
+   - Subtle pulse/heartbeat effect (shows "alive" state)
+
+2. **Audio Visualization:**
+   - Real-time waveform bars (green)
+   - Background: animated code/numbers falling (Matrix style, faint opacity)
+   - Frequency spectrum visualizer (optional)
+
+3. **Text Interactions:**
+   - Rolling transcription (green monospace text)
+   - Highlighted keywords (topic detection)
+   - Removable/closable (user can focus on audio)
+
+4. **CTA Button:**
+   - Animated border (drawing animation)
+   - Hover state: Green glow + text animation
+   - Click state: Ripple effect, quick transition to signup
+
+**User Segments:**
+
+```
+First-time Visitor:
+├─ Lands on AI face
+├─ Intrigued by interactive element
+├─ Clicks to hear news
+└─ High conversion to signup (direct experience)
+
+News-Junkies:
+├─ Attracted by: "Fresh. Non-biased. Real-time"
+├─ Wants: Multiple perspectives daily
+└─ Upgrades to Pro for: Voices + Archive
+
+Podcast Listeners:
+├─ Attracted by: AI voice + podcast-like delivery
+├─ Wants: Quality narration + customization
+└─ Upgrades to Pro/Studio for: Voice variants + Custom voices
+```
+
+**Technical Stack (Frontend):**
+
+```
+├─ SVG for AI face (scalable, animatable)
+├─ Canvas for audio visualization
+├─ Web Audio API for real-time waveform
+├─ Framer Motion / Tailwind for animations
+├─ TypeScript + React for interactivity
+├─ Tailwind CSS for styling (black + green theme)
+└─ Responsive: Mobile-first (full-screen immersive)
+```
+
+**Mobile-Optimized:**
+
+```
+Mobile (Portrait):
+├─ Full-screen black background
+├─ Large AI face (centered, 60% of screen)
+├─ Tap target: Large touch area
+├─ Text: Large, readable
+├─ Audio: Optimized for phone speaker/earbuds
+└─ CTA: Bottom-fixed sticky button
+
+Desktop (Landscape):
+├─ Centered AI face (left side)
+├─ Information panel (right side)
+├─ Text descriptions
+├─ Hover interactions
+└─ Option to play in fullscreen
+```
+
+**Brand Positioning:**
+
+This landing experience communicates:
+1. **Tech-Forward:** "We use cutting-edge AI"
+2. **Human-Centric:** "AI delivers, but for YOU"
+3. **Interactive:** "Try it now, no signup required" (except for sharing/saving)
+4. **Modern:** Sleek, black+green aesthetic (vs. traditional news apps)
+5. **Accessible:** "Just click and listen" (lower barrier than text news)
+
+---
+
+### Key Messaging for Landing Page
+
+**Headlines:**
+- "Fresh. Non-biased. Real-time News Intelligence"
+- "AI-Powered News. Your Voice. Daily."
+- "Intelligent News Briefings. No Fluff. No Bias."
+
+**Sub-Headlines:**
+- "Listen to news you actually trust"
+- "Multiple perspectives delivered to your ears daily"
+- "News that works with your schedule (6am, 12pm, 6pm)"
+- "The same news. Different voices. Your choice."
+
+**Value Props:**
+```
+✓ Fresh daily news (Morning/Midday/Evening)
+✓ Non-biased reporting (AI-curated from multiple sources)
+✓ Multiple voices (choose your favorite narrator)
+✓ 5-10 minute briefings (faster than reading)
+✓ Shareable (send to friends, no paywall)
+✓ Downloadable (Pro: save for offline listening)
+```
+
+**CTA Variations:**
+- Landing page: "Get Free Daily News"
+- After demo: "Create Free Account"
+- Pro upgrade: "Archive Favorites"
+- Share link: "Like this? Get daily news"
+
+---
+
+## Part 12: Quick Implementation Priorities
 
 The current VoxTrends caching system is functional but operates on an outdated "regenerate everything" model. This analysis proposes a **strategic architectural shift** to a **voice-first, content-plus-voice-layer architecture** that enables:
 
@@ -2455,15 +2677,42 @@ The current VoxTrends caching system is functional but operates on an outdated "
 
 **Phased deployment** starting with Quick Wins (3-4 days) for immediate impact, then Phase 1-2 foundation work (2 weeks), then new features (Phases 3-4), then optimization (Phases 5-7).
 
-**Recommended Next Step:**
-1. Start with Phase 1 Quick Wins (Request Coalescing + Analytics) for immediate visibility into current system
+**Parallel Stream: Landing Page + Brand Design**
+
+While backend team implements Phases 1-2, design team can create:
+1. AI face component (SVG + animation)
+2. Green+black design system
+3. Audio visualization system
+4. Landing page layout & interactions
+5. Mobile responsiveness
+
+This ensures landing page is ready when app features launch.
+
+**Recommended Next Steps:**
+
+**Backend Implementation:**
+1. Start with Phase 1 Quick Wins (Request Coalescing + Analytics) for immediate visibility
 2. Proceed to Phase 2 (Scheduled Generation + Auto-Retry) for foundation
 3. Then Phase 3 (Voice-First Architecture) for cost savings
 4. Then Phase 4 (Shareable Links + Credit System) for growth and revenue
 
+**Design Implementation:**
+1. Build Matrix-inspired AI face component
+2. Create audio visualization system
+3. Design landing page layout
+4. Implement signup modal integration
+5. Mobile optimization & testing
+
+**Timing:** Landing page ready within 2-3 weeks, ready to launch with Phase 4.
+
 ---
 
-**Document Version:** 2.0
+**Document Version:** 3.0
 **Last Updated:** January 31, 2026
 **Status:** Ready for Implementation
-**Strategic Shift:** Voice-First Content + Voice Layer Separation with Growth Features
+
+**Strategic Vision:**
+- **Backend:** Voice-First Architecture + Auto-Retry + Shareable Links
+- **Frontend:** Matrix-Inspired Landing Page + AI Face Interaction
+- **Monetization:** Free (ephemeral) + Pro ($5.99/mo) + Studio ($49/mo)
+- **Growth:** Viral sharing + Daily engagement loop + 1.5+ viral coefficient
