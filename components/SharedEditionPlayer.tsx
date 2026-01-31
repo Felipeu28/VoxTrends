@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, Loader, Lock } from 'lucide-react';
+import { backend } from '../services/backend';
 
 interface Edition {
   id: string;
@@ -70,22 +70,10 @@ export default function SharedEditionPlayer({
     setError(null);
 
     try {
-      const response = await fetch('/api/generate-voice-variant', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-        },
-        body: JSON.stringify({
-          edition_id: edition.id,
-          voice_id: voiceId,
-        }),
-      });
+      const result = await backend.generateVoiceVariant(edition.id, voiceId);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate audio');
+      if (!result.data?.audio_url) {
+        throw new Error('No audio URL returned from generation');
       }
 
       setSelectedVariant(voiceId);

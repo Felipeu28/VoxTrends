@@ -1,5 +1,8 @@
 'use client';
 
+import { useState } from 'react';
+import { backend } from '../services/backend';
+
 interface VoiceProfile {
   id: 'originals' | 'deep-divers' | 'trendspotters';
   label: string;
@@ -52,25 +55,13 @@ export default function VoiceSelector({
     setError(null);
 
     try {
-      const response = await fetch('/api/generate-voice-variant', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('supabase.auth.token')}`,
-        },
-        body: JSON.stringify({
-          edition_id: editionId,
-          voice_id: voiceId,
-        }),
-      });
+      const result = await backend.generateVoiceVariant(editionId, voiceId);
+      const audioUrl = result.data?.audio_url;
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate audio');
+      if (!audioUrl) {
+        throw new Error('No audio URL returned from generation');
       }
 
-      const audioUrl = data.data.audio_url;
       setGeneratedAudio((prev) => ({
         ...prev,
         [voiceId]: audioUrl,
