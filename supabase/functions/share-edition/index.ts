@@ -6,6 +6,12 @@ const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+};
+
 // Generate a short, unique token for share links (12+ alphanumeric chars)
 function generateShareToken(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -22,6 +28,14 @@ function generateShareToken(): string {
 }
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", {
+      status: 200,
+      headers: corsHeaders,
+    });
+  }
+
   try {
     // GET: Retrieve share links for an edition
     if (req.method === "GET") {
@@ -31,7 +45,7 @@ Deno.serve(async (req: Request) => {
       if (!editionId) {
         return new Response(
           JSON.stringify({ error: "edition_id is required" }),
-          { status: 400 }
+          { status: 400, headers: corsHeaders }
         );
       }
 
@@ -42,6 +56,7 @@ Deno.serve(async (req: Request) => {
       if (!token) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
+          headers: corsHeaders,
         });
       }
 
@@ -52,6 +67,7 @@ Deno.serve(async (req: Request) => {
       } catch {
         return new Response(JSON.stringify({ error: "Invalid token" }), {
           status: 401,
+          headers: corsHeaders,
         });
       }
 
@@ -65,6 +81,7 @@ Deno.serve(async (req: Request) => {
       if (editionError || !edition || edition.user_id !== userId) {
         return new Response(JSON.stringify({ error: "Access denied" }), {
           status: 403,
+          headers: corsHeaders,
         });
       }
 
@@ -83,7 +100,7 @@ Deno.serve(async (req: Request) => {
           shares: shares || [],
           count: shares?.length || 0,
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -95,6 +112,7 @@ Deno.serve(async (req: Request) => {
       if (!token) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
+          headers: corsHeaders,
         });
       }
 
@@ -105,6 +123,7 @@ Deno.serve(async (req: Request) => {
       } catch {
         return new Response(JSON.stringify({ error: "Invalid token" }), {
           status: 401,
+          headers: corsHeaders,
         });
       }
 
@@ -114,7 +133,7 @@ Deno.serve(async (req: Request) => {
       if (!edition_id) {
         return new Response(
           JSON.stringify({ error: "edition_id is required" }),
-          { status: 400 }
+          { status: 400, headers: corsHeaders }
         );
       }
 
@@ -128,6 +147,7 @@ Deno.serve(async (req: Request) => {
       if (editionError || !edition || edition.user_id !== userId) {
         return new Response(JSON.stringify({ error: "Access denied" }), {
           status: 403,
+          headers: corsHeaders,
         });
       }
 
@@ -160,7 +180,7 @@ Deno.serve(async (req: Request) => {
           created_at: shareLink.created_at,
           expires_at: shareLink.expires_at,
         }),
-        { status: 201, headers: { "Content-Type": "application/json" } }
+        { status: 201, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -172,6 +192,7 @@ Deno.serve(async (req: Request) => {
       if (!token) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
+          headers: corsHeaders,
         });
       }
 
@@ -182,6 +203,7 @@ Deno.serve(async (req: Request) => {
       } catch {
         return new Response(JSON.stringify({ error: "Invalid token" }), {
           status: 401,
+          headers: corsHeaders,
         });
       }
 
@@ -205,6 +227,7 @@ Deno.serve(async (req: Request) => {
       if (shareError || !share || share.created_by !== userId) {
         return new Response(JSON.stringify({ error: "Access denied" }), {
           status: 403,
+          headers: corsHeaders,
         });
       }
 
@@ -218,12 +241,13 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ message: "Share link revoked" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
+      headers: corsHeaders,
     });
   } catch (error) {
     console.error("Share function error:", error.message);
