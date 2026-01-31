@@ -751,6 +751,7 @@ const App: React.FC = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [quotaRefreshTrigger, setQuotaRefreshTrigger] = useState(0);
   const [selectedVoiceId, setSelectedVoiceId] = useState('originals');
+  const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
 
   const t = translations[language as keyof typeof translations] || translations.English;
 
@@ -1092,6 +1093,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleClearCache = async () => {
+    try {
+      await voxDB.clearAll();
+      setDailyEditions({});
+      setShowMobileSettings(false);
+      setShowClearCacheConfirm(false);
+      setToastMessage('✨ Cache cleared successfully. Refresh to load new editions.');
+    } catch (error) {
+      console.error('Clear cache error:', error);
+      setToastMessage('Failed to clear cache');
+    }
+  };
+
   // ==================== RENDER ====================
 
   if (authLoading) {
@@ -1211,6 +1225,42 @@ const App: React.FC = () => {
                   <option value="trendspotters">The Trendspotters (Leo & Maya)</option>
                 </select>
               </div>
+              <div className="pt-6 border-t border-zinc-800 space-y-3">
+                <button
+                  onClick={() => setShowClearCacheConfirm(true)}
+                  className="w-full px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-2xl font-bold text-sm transition"
+                >
+                  🗑️ Clear Cache
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Cache Confirmation Modal */}
+      {showClearCacheConfirm && (
+        <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-[2rem] p-8 space-y-6 shadow-2xl animate-in zoom-in">
+            <div className="space-y-3 text-center">
+              <h3 className="text-2xl font-serif font-bold">Clear Cache?</h3>
+              <p className="text-sm text-zinc-400">
+                This will remove all locally cached editions. You'll need to refresh to load new content.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearCacheConfirm(false)}
+                className="flex-1 px-4 py-3 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700 rounded-xl font-bold transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearCache}
+                className="flex-1 px-4 py-3 bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30 rounded-xl font-bold transition"
+              >
+                Clear Cache
+              </button>
             </div>
           </div>
         </div>
@@ -1335,6 +1385,15 @@ const App: React.FC = () => {
               <option value="deep-divers">The Deep-Divers (David & Sarah)</option>
               <option value="trendspotters">The Trendspotters (Leo & Maya)</option>
             </select>
+          </div>
+
+          <div className="pt-4 border-t border-zinc-800">
+            <button
+              onClick={() => setShowClearCacheConfirm(true)}
+              className="w-full px-4 py-2.5 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-sm font-bold rounded-xl transition"
+            >
+              🗑️ Clear Cache
+            </button>
           </div>
         </div>
       </aside>
