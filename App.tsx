@@ -15,6 +15,7 @@ import { backend } from './services/backend';
 import QuotaDisplay from './components/QuotaDisplay';
 import UpgradeModal from './components/UpgradeModal';
 import PricingPage from './components/PricingPage';
+import VoiceSelector from './components/VoiceSelector';
 
 interface DailyData {
   text: string;
@@ -25,6 +26,11 @@ interface DailyData {
   flashSummary?: string;
   chatHistory?: ChatMessage[];
   date?: string; // Added date for daily reset check
+  // Phase 3: Voice Variants
+  edition_id?: string;
+  scriptReady?: boolean;
+  voiceVariantsAvailable?: string[];
+  voiceVariantsGeneratedCount?: number;
 }
 
 // Convert base64 audio to blob URL for playback
@@ -875,7 +881,19 @@ const App: React.FC = () => {
         setStatus('Generating fresh edition...');
       }
 
-      const { text, script, audio, imageUrl, links, flashSummary } = result.data;
+      const {
+        text,
+        script,
+        audio,
+        imageUrl,
+        links,
+        flashSummary,
+        // Phase 3: Voice Variants
+        edition_id,
+        scriptReady,
+        voiceVariantsAvailable,
+        voiceVariantsGeneratedCount,
+      } = result.data;
 
       const newData: DailyData = {
         text,
@@ -885,7 +903,12 @@ const App: React.FC = () => {
         imageUrl: imageUrl || null,
         flashSummary: flashSummary,
         chatHistory: [],
-        date: todayStr // Save today's date
+        date: todayStr, // Save today's date
+        // Phase 3: Voice Variants
+        edition_id,
+        scriptReady,
+        voiceVariantsAvailable,
+        voiceVariantsGeneratedCount,
       };
 
       setDailyEditions(prev => {
@@ -1409,18 +1432,35 @@ const App: React.FC = () => {
                             </button>
                           </div>
 
-                          <AudioPlayer
-                            audioData={currentDaily.audio}
-                            clipId={`edition-${activeTab}`}
-                            isPlaying={playingClipId === `edition-${activeTab}`}
-                            onPlayPause={() => {
-                              if (playingClipId === `edition-${activeTab}`) {
-                                setPlayingClipId(null);
-                              } else {
-                                setPlayingClipId(`edition-${activeTab}`);
-                              }
-                            }}
-                          />
+                          {/* Phase 3: Show VoiceSelector if scriptReady but no audio yet */}
+                          {currentDaily.scriptReady && !currentDaily.audio ? (
+                            <div className="flex-1">
+                              <VoiceSelector
+                                editionId={currentDaily.edition_id || ''}
+                                isScriptReady={true}
+                                onAudioGenerated={(voiceId, audioUrl) => {
+                                  // Update currentDaily with generated audio
+                                  const updatedDaily = { ...currentDaily, audio: audioUrl };
+                                  const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
+                                  setDailyEditions(updatedEditions);
+                                  voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <AudioPlayer
+                              audioData={currentDaily.audio}
+                              clipId={`edition-${activeTab}`}
+                              isPlaying={playingClipId === `edition-${activeTab}`}
+                              onPlayPause={() => {
+                                if (playingClipId === `edition-${activeTab}`) {
+                                  setPlayingClipId(null);
+                                } else {
+                                  setPlayingClipId(`edition-${activeTab}`);
+                                }
+                              }}
+                            />
+                          )}
                         </>
                       ) : (
                         <div className="flex flex-col items-end gap-3">
