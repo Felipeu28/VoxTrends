@@ -804,7 +804,7 @@ serve(async (req) => {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 6);
 
-    await supabaseClient
+    const { data: editionData, error: cacheError } = await supabaseClient
       .from('daily_editions')
       .upsert({
         edition_type: editionType,
@@ -820,9 +820,44 @@ serve(async (req) => {
         expires_at: expiresAt.toISOString(),
       }, {
         onConflict: 'edition_type,region,language,date'
-      });
+      })
+      .select()
+      .single();
+
+    if (cacheError) {
+      throw new Error(`Failed to cache edition: ${cacheError.message}`);
+    }
 
     console.log('Edition cached');
+
+    // ==================== PHASE 4: SCHEDULE CONTENT DELETION ====================
+    // Create expiration schedule entry based on user's plan tier
+    const retentionHours = {
+      'Free': 24,
+      'Pro': 7 * 24,      // 7 days
+      'Studio': 30 * 24,  // 30 days
+    };
+
+    const tierRetentionHours = retentionHours[userPlan as keyof typeof retentionHours] || 24;
+    const scheduledDeletionAt = new Date();
+    scheduledDeletionAt.setHours(scheduledDeletionAt.getHours() + tierRetentionHours);
+
+    await supabaseClient
+      .from('content_expiration_schedule')
+      .upsert({
+        edition_id: editionData.id,
+        user_id: user.id,
+        tier: userPlan,
+        scheduled_deletion_at: scheduledDeletionAt.toISOString(),
+      }, {
+        onConflict: 'edition_id,user_id'
+      })
+      .catch((err) => {
+        console.warn(`⚠️ Failed to schedule content deletion: ${err}`);
+        // Non-blocking error - don't fail the whole function
+      });
+
+    console.log(`📅 Content scheduled for deletion in ${tierRetentionHours} hours (${userPlan} tier)`);
 
     // Increment usage
     await supabaseClient.rpc('increment_daily_usage', {
