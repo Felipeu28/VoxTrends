@@ -36,9 +36,7 @@ CREATE TABLE IF NOT EXISTS voice_variant_costs (
   edition_id uuid NOT NULL REFERENCES daily_editions(id) ON DELETE CASCADE,
   voice_id text NOT NULL,
   cost decimal(10, 4) NOT NULL DEFAULT 0.05,
-  generated_at timestamp with time zone NOT NULL DEFAULT now(),
-
-  INDEX idx_user_date ON user_id, generated_at
+  generated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
 -- Indexes for performance
@@ -53,6 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_variant_status_status ON voice_variant_generation
 
 CREATE INDEX IF NOT EXISTS idx_variant_costs_user_id ON voice_variant_costs(user_id);
 CREATE INDEX IF NOT EXISTS idx_variant_costs_edition_id ON voice_variant_costs(edition_id);
+CREATE INDEX IF NOT EXISTS idx_variant_costs_user_date ON voice_variant_costs(user_id, generated_at);
 
 -- Add new columns to daily_editions to support Phase 3
 ALTER TABLE daily_editions
