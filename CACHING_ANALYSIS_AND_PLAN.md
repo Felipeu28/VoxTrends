@@ -806,7 +806,7 @@ CREATE TABLE shared_edition_links (
   shared_by_user_id UUID REFERENCES users,
   share_token VARCHAR(64) UNIQUE,  -- URL slug: /shared/audio/{shareToken}
   created_at TIMESTAMP,
-  expires_at TIMESTAMP,  -- optional: expire after 30 days (keep fresh)
+  expires_at TIMESTAMP,  -- 30 days from creation (keeps links fresh, drives urgency)
 
   -- Analytics
   click_count INT DEFAULT 0,
@@ -816,7 +816,11 @@ CREATE TABLE shared_edition_links (
 
   -- Referral tracking
   last_clicked_at TIMESTAMP,
-  referral_credits_awarded INT DEFAULT 0
+  referral_credits_awarded INT DEFAULT 0,
+
+  -- Expiration tracking
+  is_expired BOOLEAN DEFAULT FALSE,
+  expired_at TIMESTAMP
 );
 
 CREATE TABLE share_click_events (
@@ -830,6 +834,10 @@ CREATE TABLE share_click_events (
   converted_user_id UUID,  -- if listener later signed up
   converted_at TIMESTAMP
 );
+
+-- Edition expiration: Content deleted after 24 hours (drives daily check-ins)
+-- Shared links expire after 30 days (keeps shares fresh, drives viral loop)
+-- Note: No permanent archives in Free tier (creates upgrade motivation)
 ```
 
 **Frontend Implementation:**
@@ -850,51 +858,135 @@ Audio Player Component:
 ```typescript
 // No auth required
 GET /api/shared/audio/{shareToken}
-  ├─ Fetch audio from storage
-  ├─ Increment click_count
-  ├─ Create session for tracking
-  ├─ Return audio stream + edition metadata
-  └─ Display signup prompt (optional, non-blocking)
-
-// Unauthenticated users see:
-// "Like what you heard? Create an account to generate your own editions"
-// With referral credit incentive (if implemented)
+  ├─ Validate share token exists
+  ├─ Check if share link expired (> 30 days)
+  │  └─ If expired:
+  │     ├─ Return 410 Gone status
+  │     ├─ Suggest latest edition instead
+  │     ├─ Prompt: "This edition is no longer available"
+  │     └─ CTA: "Create account to check today's latest news"
+  │
+  ├─ Check if edition content deleted (> 24 hours old)
+  │  └─ If deleted:
+  │     ├─ Return 404 Not Found
+  │     ├─ Explain: "Content expires after 24 hours"
+  │     └─ CTA: "Create account to listen to today's edition"
+  │
+  ├─ If valid:
+  │  ├─ Fetch audio from storage
+  │  ├─ Increment click_count
+  │  ├─ Create session for tracking
+  │  ├─ Return audio stream + edition metadata
+  │  └─ After playback complete:
+  │     ├─ Show: "Loved this? Create an account"
+  │     ├─ Highlight: "Your friend will be notified you signed up"
+  │     └─ CTA: "Create Free Account"
 ```
+
+**Smart Redirect Strategy (Expired Content):**
+```
+Share Link Clicked:
+├─ Valid (< 30 days + edition not deleted):
+│  └─ Play audio directly → Signup prompt after
+│
+├─ Share link expired (≥ 30 days):
+│  └─ "This share expired, but check today's latest edition!"
+│     [Button: Load today's Morning/Midday/Evening]
+│     [Button: Create Account]
+│
+├─ Edition deleted (≥ 24 hours):
+│  └─ "This edition has expired (we only keep 24-hour editions)"
+│     "But your friend shared amazing news - create an account to get fresh daily editions!"
+│     [Button: Create Account + Get Free Editions]
+│
+└─ Friend not signed up yet:
+   └─ [Button: Create Account (Friend will know you signed up!)]
+```
+
+This creates natural **invitation funnel:**
+1. User A shares → Friend B clicks
+2. Friend B listens to old edition → Wants today's content
+3. Friend B creates account → Natural discovery of daily generation feature
+4. Friend B becomes user → Starts sharing with others
+
 
 **Features:**
 - Direct audio playback (unauthenticated access)
 - No signup wall (maximize listening)
 - Trusted source social proof (friend shared it)
 - Click tracking and analytics (per share link)
-- Optional expiration (keep fresh editions highlighted)
+- **Edition expiration (24 hours):** Content deleted after 1 day
+  - Drives daily engagement (check app for latest)
+  - Creates FOMO: "This is gone, what's today's news?"
+  - Distinguishes Free from Premium (Premium = downloads)
+- **Share link expiration (30 days):** Links redirect to latest edition
+  - Keeps shared content fresh
+  - Old shares become invitations to latest content
+  - Viral loop: Friend clicks old share → Wants today's → Signs up
 - Referral tracking infrastructure (foundation for future incentives)
 - Social media previews (og:title, og:image, og:audio)
+- Smart 404 handling: Expired shares invite to app instead of dead links
 
-**Conversion Funnel:**
+**Conversion Funnel with Expiration-Driven Engagement:**
 ```
-1. User A creates account, listens to Morning Edition
-2. User A shares with Friend B (via link)
+1. User A creates account, listens to Morning Edition with Deep Diver voice
+2. User A shares with Friend B via link (share expires in 30 days)
    └─ Analytics records: share_edition_links.click_count++
-3. Friend B listens without signup
-   └─ Analytics records: share_click_events (anonymous session)
-4. Friend B enjoys content, clicks "Create Account"
+
+3. Friend B clicks link immediately (edition still fresh):
+   ├─ Listens to full audio without signup
+   ├─ Loves content quality
+   └─ Sees: "Like this? Create account to get daily editions"
+
+4. Friend B doesn't sign up immediately... shares link with Friend C
+
+5. Days pass... Friend B clicks same link again:
+   ├─ Edition DELETED (only kept 24 hours)
+   └─ Sees: "This edition expired, but today's Morning is fresh!"
+   └─ CTA: "Create account to listen to today's edition"
+   └─ Realizes: Must be active user to access content
+
+6. Friend B creates account (wants daily editions)
    └─ Signup flow shows: "You were referred by User A"
+   └─ Receives referral credit (tracks share → signup)
+   └─ Gets same Deep Diver voice available
    └─ Analytics: clicks_by_user_id += Friend B
-   └─ Optional: Award referral credits to User A
-5. User A sees: "1 person signed up from your share!"
-   └─ Gamification: Share more → More signups → More credits
+
+7. User A sees: "1 person signed up from your share!"
+   └─ Gamification: Share more → More signups → More credits (Phase 8)
+
+8. Friend B becomes active user → Starts sharing → Viral loop continues
+   └─ Edition freshness drives daily check-ins
+   └─ Shares drive invitations to latest content
 ```
+
+**Key Mechanics:**
+- **24-hour content expiration** = Daily engagement loop (FOMO)
+- **30-day share expiration** = Fresh viral distribution
+- **Expired shares redirect to latest** = Smart onboarding
+- **No archives in Free tier** = Upgrade incentive for downloads
+
 
 **Growth Impact:**
 - **Zero friction:** No signup required to experience product
+- **Daily engagement loop:** 24-hour content expiration drives daily check-ins
+- **FOMO mechanism:** "Edition is gone, what's today's news?" → Natural signup motivation
 - **Viral coefficient:** Each listener can become sharer → exponential growth
+- **Smart invitations:** Expired shares redirect to latest edition → Natural onboarding
 - **Trust signal:** Friend recommendation > Cold marketing
-- **Analytics foundation:** Measure share → listen → signup conversion
-- **Referral infrastructure:** Ready for incentive program
-- **Content-driven growth:** Awesome news → naturally shared
+- **Analytics foundation:** Measure share → listen → signup conversion (with expiration timing)
+- **Referral infrastructure:** Ready for incentive program (Phase 8)
+- **Premium upgrade path:** Free tier = no archives → Pay for downloads/archives
 
-**Primary Driver:** Content quality (fresh, well-narrated news) makes sharing organic
-**Secondary Driver:** Referral analytics (measure impact, set up incentives later)
+**Primary Drivers:**
+1. **Content quality** (fresh, well-narrated news) makes sharing organic
+2. **Content freshness** (24-hour expiration) drives daily engagement
+3. **Expiration momentum** (old shares redirect to latest) creates natural invitations
+
+**Monetization Hook:**
+- Free: 3 editions/day, voice access, BUT no downloads or archives
+- Premium: All free features PLUS download/archive capability
+- Hook: Users want to save/archive favorite editions → natural upgrade
 
 ---
 
@@ -949,24 +1041,34 @@ Natural upsell to Pro tier
 ```
 User Plans:
 ├─ Free
-│  ├─ 3 editions/day
+│  ├─ 3 editions/day (Morning/Midday/Evening)
 │  ├─ Standard voice only (Original)
+│  ├─ NO archives/downloads (24-hour expiration)
+│  ├─ Can share editions (link expires 30 days)
 │  └─ 0 credits/month
+│  └─ Hook: "Upgrade to download favorite editions"
 │
 ├─ Pro ($9.99/month or similar)
 │  ├─ Unlimited editions/day
-│  ├─ All voice variants
-│  ├─ Guided Researcher with voice
+│  ├─ All voice variants (each 1 credit, one-time unlock)
+│  ├─ Guided Researcher with voice (2 credits/section)
+│  ├─ DOWNLOAD & ARCHIVE capability (store unlimited editions)
+│  ├─ OFFLINE playback of downloaded editions
 │  └─ 100 credits/month to spend on:
-│      ├─ Archive past editions (1 credit each)
-│      ├─ Premium voices if added (5 credits each)
-│      └─ Guided Researcher deep-dive voice (2 credits/section)
+│      ├─ Voice variant unlocks (1 credit per voice, one-time)
+│      ├─ Guided Researcher voice narration (2 credits/section)
+│      └─ Premium features if added
 │
 └─ Enterprise
    ├─ Everything Pro
    ├─ Custom voice profiles
-   └─ Unlimited credits
+   ├─ Unlimited credits/month
+   └─ Dedicated features/support
 ```
+
+**Key Distinction:**
+- **Free tier:** Ephemeral (content gone after 24h) → drives daily engagement
+- **Pro tier:** Persistent (download & keep forever) → natural upgrade incentive
 
 **Database Updates:**
 ```sql
@@ -1209,24 +1311,40 @@ CREATE TABLE credit_transactions (
    - Add monthly_credits to users table
    - Track credit spending per feature
    - Display credit balance prominently
-   - Show costs for voice variants vs researcher
-   - Expected impact: Revenue model clarity
+   - Show costs for voice variants vs researcher narration
+   - Show download/archive capability as Pro feature (not credit-based)
+   - Expected impact: Revenue model clarity, natural upgrade path
    ```
 
-4. **Update Pricing Tiers (Priority: 🟡 MEDIUM)**
+4. **Implement Download & Archive for Pro Tier (Priority: 🟠 HIGH)**
    ```
-   File: pricing/plans.ts
-   - Free: 3 editions, standard voice only
-   - Pro: Unlimited editions, all voices, 100 credits/mo
-   - Show credit breakdown in pricing page
-   - Expected impact: Clear upsell path
+   Database: user_archives table
+   File: services/archive.ts, UI components
+   - Pro users can download edition audio + metadata
+   - Archive endpoint: Store edition permanently for user
+   - Offline playback: Service worker caches downloads
+   - Archive UI: "Download for offline", "Saved editions"
+   - Storage limit: Pro users get 1GB archive storage
+   - Expected impact: Clear Pro value, offline functionality
+   ```
+
+5. **Update Pricing Tiers (Priority: 🟡 MEDIUM)**
+   ```
+   File: pricing/plans.ts, marketing pages
+   - Free: 3 editions/day, standard voice, no archives
+   - Pro: Unlimited editions, all voices, download/archive, 100 credits/mo
+   - Show archive capability as primary Pro benefit
+   - Show voice unlocks and Researcher narration as credit benefits
+   - Expected impact: Clear upsell path, high conversion incentive
    ```
 
 **Expected Outcomes:**
-- Viral growth mechanism (shareable links)
-- Expanded Guided Researcher feature
-- Revenue diversification (credit system)
-- Clear pricing and upgrade path
+- Viral growth mechanism (shareable links + 24-hour expiration)
+- Daily engagement loop (users check daily for new content)
+- Natural upgrade incentive (free = ephemeral, pro = persistent)
+- Expanded Guided Researcher feature with voice narration
+- Revenue model: Base subscription + credit system + archive storage
+- Clear pricing tiers with distinct value propositions
 
 ---
 
@@ -1426,6 +1544,85 @@ This foundation enables Phase 8+ features:
 - Viral loop incentive: "Share 10 times → unlock premium voice"
 
 But Phase 4 focuses on **analytics infrastructure**, not incentive logic.
+
+---
+
+### Expiration-Driven Engagement Strategy
+
+**Why 24-Hour Content Expiration is Powerful:**
+
+Traditional content apps = Archive everything → Users check sporadically
+
+VoxTrends = Ephemeral daily editions → Users check DAILY
+
+```
+Traditional Model:
+Content = Permanent Archive
+└─ Users check: Whenever they want (low frequency)
+└─ Engagement: Sporadic
+└─ Monetization: Passive (hope they see ads/upgrade)
+
+VoxTrends Model:
+Content = Fresh daily, expires after 24h
+└─ Users check: Daily (FOMO - "what's today's news?")
+└─ Engagement: High (daily habit formation)
+└─ Monetization: Premium = download/archive (creates natural upgrade)
+```
+
+**How Expiration Drives Viral Growth:**
+
+```
+Day 1: User A shares Morning Edition with Friend B
+  └─ Link is fresh, content is fresh
+  └─ Friend B listens without signup
+
+Day 3: Friend B clicks same link again (tells Friend C)
+  ├─ Content DELETED (24h expiration)
+  ├─ Link still valid (30d)
+  ├─ System shows: "Edition expired, check today's fresh news!"
+  └─ Friend B realizes: Must be active to get daily content
+  └─ Friend B signs up → natural onboarding
+
+Day 25: Friend A tries to share old link with Friend D
+  ├─ Content deleted (25d > 24h)
+  ├─ Link expired (25d < 30d, but showing expiration)
+  ├─ System redirects: "This share is old, here's today's edition instead"
+  └─ Friend D discovers app through "latest news" instead of old share
+
+Result: Expiration creates MULTIPLE invitation moments instead of one-time share
+```
+
+**Three-Tier Engagement Loop:**
+
+1. **Creation Loop** (Daily habit):
+   - Edition drops at 6am/12pm/6pm
+   - Users check app for latest → DAU increases
+   - Fresh content → High-quality listening experience
+
+2. **Sharing Loop** (Viral growth):
+   - Users share edition (link good for 30d)
+   - Friends listen (zero friction)
+   - Friends either sign up or check back later
+
+3. **Invitation Loop** (Renewable growth):
+   - Friend checks old share (content deleted, link expired)
+   - Gets invited to latest edition instead of dead link
+   - New user acquisition without forced signup wall
+
+**Premium Tier Hook:**
+
+Free tier users:
+- Check app daily (content expires)
+- Can't save favorites (24h limit)
+- Eventually want to archive a good episode
+- → Upgrade to Pro for downloads/archives
+
+```
+Conversion path:
+Free user (daily) → Finds favorite edition → Wants to save it
+                 → Discovers "Pro users can download"
+                 → Upgrades → Gets unlimited archives + offline
+```
 
 ---
 
@@ -2069,6 +2266,10 @@ LIMIT 20;
 2. **Click-Through Rate** - Target: 15%+ of shares result in a click
 3. **Listener-to-Signup Conversion** - Target: 25%+ of listeners sign up
 4. **Viral Coefficient** - Target: 1.5+ (each user generates 1.5+ new users)
+5. **Expired Link Redirect Rate** - Target: 30%+ of expired shares redirect to latest edition
+   - Tracks: How many people come back to old share → Get invited to latest content
+6. **Daily Engagement Loop** - Target: 50%+ DAU (daily active users)
+   - Driven by: 24-hour content expiration + fresh daily editions
 
 ### After Full Implementation (Phase 7)
 
@@ -2095,6 +2296,11 @@ LIMIT 20;
    - 40%+ of Pro users spend monthly credits
    - Average credit spend: 60 credits/month
    - 25%+ upgrade from Free to Pro for voice access
+
+4. **Archive & Download Adoption:**
+   - 60%+ of Pro users download at least 1 edition/month
+   - Average archive size: 150MB per Pro user
+   - Archive feature drives 30%+ of Free → Pro conversions
 
 **Operational Efficiency:**
 1. **Reliability:** 99%+ generation success rate with auto-retry
