@@ -63,6 +63,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ==================== PHASE 3: FETCH VOICE VARIANTS ====================
+    // Get all voice variants available for this edition
+    const { data: variants } = await supabase
+      .from("voice_variants")
+      .select("voice_id, audio_url, created_at")
+      .eq("edition_id", shareLink.edition_id);
+
+    const variantMap = variants?.reduce((acc, v) => {
+      acc[v.voice_id] = v.audio_url;
+      return acc;
+    }, {} as Record<string, string>) || {};
+
     // Log access (async, non-blocking)
     const clientIP = req.headers.get("x-forwarded-for") ||
       req.headers.get("x-real-ip") ||
@@ -90,10 +102,18 @@ Deno.serve(async (req: Request) => {
       })
       .catch((err) => console.error("Failed to log access:", err));
 
-    // Return edition with share metadata
+    // ==================== PHASE 3 & 4: RETURN SHARED EDITION WITH VARIANTS ====================
+    // Return edition with share metadata and available voice variants
     return new Response(
       JSON.stringify({
-        edition: edition,
+        edition: {
+          ...edition,
+          voiceVariants: {
+            available: Object.keys(variantMap),
+            count: Object.keys(variantMap).length,
+            audioUrls: variantMap,  // Map of voice_id -> audio_url
+          },
+        },
         share_metadata: {
           share_token: shareToken,
           shared_by: null,  // Privacy: don't expose creator

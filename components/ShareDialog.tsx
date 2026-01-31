@@ -10,6 +10,8 @@ interface ShareLink {
   created_at: string;
   expires_at: string;
   access_count: number;
+  variant_count?: number;  // Phase 3: How many voice variants available
+  shared_variant_id?: string;  // Phase 3: Which variant was shared (optional)
 }
 
 interface ShareDialogProps {
