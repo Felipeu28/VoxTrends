@@ -18,33 +18,182 @@ function handleCors(req: Request) {
   }
 }
 
-// ==================== VOICE PROFILES ====================
-const VOICE_PROFILES = {
-  'originals': {
-    hosts: { lead: 'Joe', expert: 'Jane' },
-    voices: { lead: 'Puck', expert: 'Kore' },
-    label: 'The Originals'
-  },
-  'deep-divers': {
-    hosts: { lead: 'David', expert: 'Sarah' },
-    voices: { lead: 'Charon', expert: 'Aoede' },
-    label: 'The Deep-Divers'
-  },
-  'trendspotters': {
-    hosts: { lead: 'Leo', expert: 'Maya' },
-    voices: { lead: 'Fenrir', expert: 'Kore' },
-    label: 'The Trendspotters'
+// ==================== MAIN FUNCTION ====================
+console.log('Generate Voice Variant Function Started');
+
+serve(async (req) => {
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  try {
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error('Invalid JSON body:', e);
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { edition_id, voice_id } = body;
+
+    console.log('Voice variant request:', { edition_id, voice_id });
+
+    // Validate inputs
+    if (!edition_id || !voice_id) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: edition_id, voice_id' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get authorization header - CRITICAL
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('❌ Missing authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('✅ Authorization header present');
+
+    // Create Supabase client with authorization
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false }
+      }
+    );
+
+    console.log('🔐 Validating JWT...');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+    if (authError) {
+      console.error('❌ Auth error:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized', message: 'Invalid JWT', details: authError.message }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!user) {
+      console.error('❌ No user found in JWT');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized', message: 'No user in JWT' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('✅ User authenticated:', user.id);
+
+    // Get the edition
+    const { data: edition, error: editionError } = await supabaseClient
+      .from('daily_editions')
+      .select('id, script, user_id, content')
+      .eq('id', edition_id)
+      .single();
+
+    if (editionError || !edition) {
+      console.error('❌ Edition not found:', editionError);
+      return new Response(
+        JSON.stringify({ error: 'Edition not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify ownership
+    if (edition.user_id !== user.id) {
+      console.error('❌ User does not own this edition');
+      return new Response(
+        JSON.stringify({ error: 'Access denied: You do not own this edition' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('✅ Edition found and owned by user');
+
+    if (!edition.script) {
+      return new Response(
+        JSON.stringify({ error: 'Edition script not available' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Generate audio using Gemini
+    console.log('🎙️ Generating audio for voice:', voice_id);
+    const gemini = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY') ?? '' });
+
+    const voiceMap: Record<string, { lead: string; expert: string }> = {
+      'originals': { lead: 'Puck', expert: 'Kore' },
+      'deep-divers': { lead: 'Charon', expert: 'Aoede' },
+      'trendspotters': { lead: 'Fenrir', expert: 'Kore' }
+    };
+
+    const voices = voiceMap[voice_id] || voiceMap['originals'];
+
+    try {
+      const response = await gemini.models.generateContent({
+        model: 'gemini-2.5-flash-preview-tts',
+        contents: [{ parts: [{ text: edition.script }] }],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            multiSpeakerVoiceConfig: {
+              speakerVoiceConfigs: [
+                { speaker: 'Joe', voiceConfig: { prebuiltVoiceConfig: { voiceName: voices.lead } } },
+                { speaker: 'Jane', voiceConfig: { prebuiltVoiceConfig: { voiceName: voices.expert } } }
+              ]
+            }
+          }
+        }
+      });
+
+      const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+      if (!audioData) {
+        console.error('❌ Gemini returned no audio data');
+        return new Response(
+          JSON.stringify({ error: 'Gemini TTS failed to generate audio' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('✅ Audio generated successfully');
+
+      // Return the audio
+      return new Response(
+        JSON.stringify({
+          data: {
+            audio_url: `data:audio/wav;base64,${audioData}`,
+            voice_id,
+            edition_id
+          }
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (geminiError: any) {
+      console.error('❌ Gemini error:', geminiError);
+      return new Response(
+        JSON.stringify({ error: 'Audio generation failed', details: geminiError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+  } catch (error: any) {
+    console.error('❌ Function error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal server error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
-} as const;
+});
 
-type VoiceId = keyof typeof VOICE_PROFILES;
-
-// ==================== REQUEST COALESCING ====================
-const inFlightVariants = new Map<string, Promise<any>>();
-
-function getVariantCacheKey(editionId: string, voiceId: string): string {
-  return `${editionId}:${voiceId}`;
-}
 
 // ==================== GEMINI SERVICE ====================
 function createWavHeader(pcmLength: number): Uint8Array {
