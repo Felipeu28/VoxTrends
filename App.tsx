@@ -1220,9 +1220,9 @@ const App: React.FC = () => {
                   }}
                   className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
                 >
-                  <option value="originals">The Originals (Joe & Jane)</option>
-                  <option value="deep-divers">The Deep-Divers (David & Sarah)</option>
-                  <option value="trendspotters">The Trendspotters (Leo & Maya)</option>
+                  <option value="originals">The Originals (Alex & Jordan)</option>
+                  <option value="deep-divers">The Deep-Divers (Marcus & Elena)</option>
+                  <option value="trendspotters">The Trendspotters (Kai & Sophia)</option>
                 </select>
               </div>
               <div className="pt-6 border-t border-zinc-800 space-y-3">
@@ -1381,9 +1381,9 @@ const App: React.FC = () => {
               className="px-4 py-2.5 bg-black border border-zinc-800 rounded-xl text-sm font-bold text-zinc-300 focus:border-violet-600 focus:ring-1 focus:ring-violet-600 outline-none hover:border-zinc-700 transition-all appearance-none cursor-pointer"
               style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
             >
-              <option value="originals">The Originals (Joe & Jane)</option>
-              <option value="deep-divers">The Deep-Divers (David & Sarah)</option>
-              <option value="trendspotters">The Trendspotters (Leo & Maya)</option>
+              <option value="originals">The Originals (Alex & Jordan)</option>
+              <option value="deep-divers">The Deep-Divers (Marcus & Elena)</option>
+              <option value="trendspotters">The Trendspotters (Kai & Sophia)</option>
             </select>
           </div>
 
@@ -1566,9 +1566,9 @@ const App: React.FC = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8">
                           <p className="text-xs font-mono text-violet-400 tracking-widest uppercase">
                             VOX HOSTS: {
-                              selectedVoiceId === 'deep-divers' ? 'DAVID & SARAH' :
-                                selectedVoiceId === 'trendspotters' ? 'LEO & MAYA' :
-                                  'JOE & JANE'
+                              selectedVoiceId === 'deep-divers' ? 'MARCUS & ELENA' :
+                                selectedVoiceId === 'trendspotters' ? 'KAI & SOPHIA' :
+                                  'ALEX & JORDAN'
                             }
                           </p>
                         </div>

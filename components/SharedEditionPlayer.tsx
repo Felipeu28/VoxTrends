@@ -27,15 +27,15 @@ interface SharedEditionPlayerProps {
 const VOICE_PROFILES = {
   originals: {
     label: 'The Originals',
-    description: 'Joe & Jane - Dynamic, energetic hosts',
+    description: 'Alex & Jordan - Dynamic, energetic hosts',
   },
   'deep-divers': {
     label: 'The Deep-Divers',
-    description: 'David & Sarah - Thoughtful, analytical',
+    description: 'Marcus & Elena - Thoughtful, analytical',
   },
   trendspotters: {
     label: 'The Trendspotters',
-    description: 'Leo & Maya - Cutting-edge, future-focused',
+    description: 'Kai & Sophia - Cutting-edge, future-focused',
   },
 };
 
