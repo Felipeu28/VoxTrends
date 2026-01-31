@@ -776,21 +776,25 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 
 ### Feature 1: Shareable Audio Links (Growth Driver)
 
-**Concept:** Users can share edition audio with non-authenticated users, enabling viral growth
+**Concept:** Users can share edition audio with anyone via shareable link, enabling viral growth through trusted sources. **Key insight:** No authentication required to listen (zero friction), but coming from trusted source provides social proof → higher conversion when they sign up.
 
 **Implementation Strategy:**
 
 ```
 User's Perspective:
-- Listens to Morning Edition
+- Listens to Morning Edition with Deep Diver voice
 - Clicks "Share" → Generates shareable link
-- Shares link in Slack/Twitter/iMessage
-- Friend clicks link → Listens to audio without signup
+- Shares link in Slack/Twitter/iMessage to friend
+- Friend clicks link → Listens to FULL audio without signup
+  (Trust signal: "My friend shared this" > Cold ad)
+- Friend impressed by content quality
+- Converts to user naturally (wants to create their own, explore voices, etc.)
 
 Backend Tracking:
 - Share creates unique {shareId}
 - Maps to {edition-id, voice-id, shared-by-user-id}
-- Tracks clicks → which users shared → referral metrics
+- Tracks clicks → which users shared → conversion funnel
+- Analytics: Share → Listen → SignUp conversion metrics
 ```
 
 **Database Schema:**
@@ -798,29 +802,99 @@ Backend Tracking:
 CREATE TABLE shared_edition_links (
   id UUID PRIMARY KEY,
   edition_id UUID REFERENCES daily_editions,
-  voice_id VARCHAR(50),  -- which voice variant
+  voice_id VARCHAR(50),  -- which voice variant shared
   shared_by_user_id UUID REFERENCES users,
-  share_token VARCHAR(64) UNIQUE,  -- URL slug
+  share_token VARCHAR(64) UNIQUE,  -- URL slug: /shared/audio/{shareToken}
   created_at TIMESTAMP,
-  expires_at TIMESTAMP,  -- optional: expire after 30 days
+  expires_at TIMESTAMP,  -- optional: expire after 30 days (keep fresh)
+
+  -- Analytics
   click_count INT DEFAULT 0,
-  clicks_by_friend_id UUID[]  -- track if friends signed up
+  unique_clicks INT DEFAULT 0,
+  clicked_by_user_id UUID[],  -- tracks if listeners signed up
+  signup_count INT DEFAULT 0,  -- how many clicked → signed up
+
+  -- Referral tracking
+  last_clicked_at TIMESTAMP,
+  referral_credits_awarded INT DEFAULT 0
+);
+
+CREATE TABLE share_click_events (
+  id UUID PRIMARY KEY,
+  share_link_id UUID REFERENCES shared_edition_links,
+  clicked_by_session_id VARCHAR(255),  -- anonymous session until signup
+  clicked_at TIMESTAMP,
+  user_agent TEXT,
+
+  -- Post-signup linkage
+  converted_user_id UUID,  -- if listener later signed up
+  converted_at TIMESTAMP
 );
 ```
 
+**Frontend Implementation:**
+```
+Audio Player Component:
+├─ Standard play controls
+├─ [Share Button] → Opens share dialog
+│  ├─ Generate link if not exists
+│  ├─ Show: /shared/audio/{shareToken}
+│  ├─ [Copy Link]
+│  ├─ [Share to Twitter]: "Just listened to VoxTrends Morning Edition with @voxtrends 📰🎙️"
+│  ├─ [Share to Slack]
+│  └─ [Share to iMessage]
+└─ Show share count: "Shared 3 times"
+```
+
+**Unauthenticated Endpoint:**
+```typescript
+// No auth required
+GET /api/shared/audio/{shareToken}
+  ├─ Fetch audio from storage
+  ├─ Increment click_count
+  ├─ Create session for tracking
+  ├─ Return audio stream + edition metadata
+  └─ Display signup prompt (optional, non-blocking)
+
+// Unauthenticated users see:
+// "Like what you heard? Create an account to generate your own editions"
+// With referral credit incentive (if implemented)
+```
+
 **Features:**
-- Direct audio link (unauthenticated access)
-- Click tracking for analytics
-- Optional expiration (keep fresh content visible)
-- Friend referral tracking (if they sign up)
-- Copy-to-clipboard button
-- Social media preview (og:title, og:image, og:audio)
+- Direct audio playback (unauthenticated access)
+- No signup wall (maximize listening)
+- Trusted source social proof (friend shared it)
+- Click tracking and analytics (per share link)
+- Optional expiration (keep fresh editions highlighted)
+- Referral tracking infrastructure (foundation for future incentives)
+- Social media previews (og:title, og:image, og:audio)
+
+**Conversion Funnel:**
+```
+1. User A creates account, listens to Morning Edition
+2. User A shares with Friend B (via link)
+   └─ Analytics records: share_edition_links.click_count++
+3. Friend B listens without signup
+   └─ Analytics records: share_click_events (anonymous session)
+4. Friend B enjoys content, clicks "Create Account"
+   └─ Signup flow shows: "You were referred by User A"
+   └─ Analytics: clicks_by_user_id += Friend B
+   └─ Optional: Award referral credits to User A
+5. User A sees: "1 person signed up from your share!"
+   └─ Gamification: Share more → More signups → More credits
+```
 
 **Growth Impact:**
-- Lower friction to try VoxTrends
-- Organic virality (word-of-mouth sharing)
-- Referral tracking for incentives
-- User acquisition measurement
+- **Zero friction:** No signup required to experience product
+- **Viral coefficient:** Each listener can become sharer → exponential growth
+- **Trust signal:** Friend recommendation > Cold marketing
+- **Analytics foundation:** Measure share → listen → signup conversion
+- **Referral infrastructure:** Ready for incentive program
+- **Content-driven growth:** Awesome news → naturally shared
+
+**Primary Driver:** Content quality (fresh, well-narrated news) makes sharing organic
+**Secondary Driver:** Referral analytics (measure impact, set up incentives later)
 
 ---
 
@@ -1089,13 +1163,34 @@ CREATE TABLE credit_transactions (
 
 1. **Implement Shareable Audio Links (Priority: 🟠 HIGH)**
    ```
-   Database: shared_edition_links table
-   File: services/sharing.ts, backend.ts
-   - Create shareable URL per audio
-   - Format: voxtrends.com/shared/{shareId}
-   - Unauthenticated access to audio
-   - Track clicks and referrals
-   - Expected impact: Organic user growth
+   Database: shared_edition_links + share_click_events tables
+   File: supabase/functions/shared-edition-api/index.ts
+            pages/shared/audio/[shareToken].tsx
+            services/auth.ts (signup with referral)
+
+   Backend Tasks:
+   - Create unauthenticated endpoint for shared audio
+   - Serve full audio without signup required
+   - Anonymous session tracking (sessionId)
+   - Click counting + referral tracking
+
+   Frontend Tasks:
+   - Create shared audio listener page (/shared/audio/{shareToken})
+   - Share button in player (Twitter/Slack/iMessage/Copy)
+   - Signup prompt after audio complete
+   - Signup flow links back to referrer
+
+   Database Tasks:
+   - shared_edition_links: stores shares + click counts
+   - share_click_events: tracks individual clicks + conversions
+   - Referral linkage: anonymous listener → signed-up user
+
+   Analytics Foundation:
+   - Conversion funnel: Shares → Clicks → Signups
+   - Top sharers leaderboard
+   - Share link performance (click rate, conversion rate)
+
+   Expected impact: Organic viral growth + referral infrastructure
    ```
 
 2. **Add Voice to Guided Researcher (Priority: 🟠 HIGH)**
@@ -1281,6 +1376,56 @@ CREATE TABLE credit_transactions (
 - Proactive issue detection
 - Continuous cost optimization
 - Performance improvements
+
+---
+
+## Part 5: Strategic Design Decisions & Analytics
+
+### Shareable Links Growth Strategy
+
+**Why Unauthenticated Access is Critical:**
+
+The traditional SaaS friction funnel:
+```
+Free user → Share link → Friend sees signup wall → 70% bounce rate
+Result: Sharing doesn't drive growth
+```
+
+Better friction-reduced funnel:
+```
+Free user → Share link → Friend listens immediately → Enjoys content
+→ Voluntarily signs up (wants own editions) → 30%+ conversion
+Result: Sharing drives viral growth
+```
+
+**Trust Signal Value:**
+- Cold ad: "Try this app" → Generic
+- Friend share: "My friend sent me this news" → Personal recommendation
+  - Listener already has social proof before signup
+  - Higher trust = Higher conversion
+  - Even unauthenticated listeners become advocates
+
+**Content Quality as Primary Driver:**
+- Share button NOT the growth lever
+- **Content quality is the lever** (fresh, well-narrated news)
+- Users naturally share because content is good
+- Analytics track the results, not the driver
+
+**Secondary: Analytics Infrastructure for Future Incentives**
+
+Phase 4 implementation tracks:
+1. Who shared what
+2. How many clicks per share
+3. Who clicked and signed up
+4. Referral conversion funnel
+
+This foundation enables Phase 8+ features:
+- "You referred 5 people!" dashboard
+- Referral credit rewards: "Each signup = 10 credits"
+- Leaderboard: "Top sharers this week"
+- Viral loop incentive: "Share 10 times → unlock premium voice"
+
+But Phase 4 focuses on **analytics infrastructure**, not incentive logic.
 
 ---
 
@@ -1588,7 +1733,181 @@ Deno.serve(async (req: Request) => {
 
 ---
 
-### 5.4 Cache Analytics Dashboard Queries
+### 5.4 Shareable Links Implementation Details
+
+**Session Management for Unauthenticated Listeners:**
+
+```typescript
+// File: supabase/functions/shared-edition-api/index.ts
+
+Deno.serve(async (req: Request) => {
+  const { shareToken } = getParams(req);
+
+  // 1. Validate share token and get edition metadata
+  const shareLink = await supabase
+    .from('shared_edition_links')
+    .select('*, daily_editions(id, content, flash_summary, image_url), users(name)')
+    .eq('share_token', shareToken)
+    .single();
+
+  if (!shareLink) return new Response('Not found', { status: 404 });
+
+  // 2. Create anonymous session for tracking
+  const sessionId = generateUUID();
+  const userAgent = req.headers.get('user-agent');
+
+  // 3. Record the click
+  await supabase
+    .from('share_click_events')
+    .insert({
+      share_link_id: shareLink.id,
+      clicked_by_session_id: sessionId,
+      clicked_at: new Date(),
+      user_agent: userAgent
+    });
+
+  // 4. Increment click counter
+  await supabase
+    .from('shared_edition_links')
+    .update({ click_count: shareLink.click_count + 1 })
+    .eq('id', shareLink.id);
+
+  // 5. Get audio URL from storage
+  const audioUrl = `${supabaseStorageUrl}/editions/${shareLink.daily_editions.id}/audio/${shareLink.voice_id}.wav`;
+
+  // 6. Return edition data + audio URL
+  return new Response(JSON.stringify({
+    edition: {
+      type: shareLink.daily_editions.type,
+      content: shareLink.daily_editions.content,
+      flashSummary: shareLink.daily_editions.flash_summary,
+      imageUrl: shareLink.daily_editions.image_url,
+      audioUrl: audioUrl
+    },
+    sharedBy: shareLink.users.name,
+    shareInfo: {
+      sessionId: sessionId,
+      sharedAt: shareLink.created_at
+    }
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  });
+});
+```
+
+**Frontend: Shared Edition Listener Page**
+
+```typescript
+// Page: /shared/audio/[shareToken]
+
+<SharedAudioPlayer
+  edition={edition}
+  sharedBy={sharedBy}
+  onPlayComplete={() => {
+    // Show signup prompt after audio ends
+    if (!isAuthenticated) {
+      showSignupModal({
+        title: "Loved this? Create your account",
+        subtitle: `Shared by ${sharedBy}`,
+        referralToken: shareToken,
+        cta: "Create Free Account"
+      });
+    }
+  }}
+/>
+```
+
+**Signup Flow with Referral Linkage:**
+
+```typescript
+// File: services/auth.ts
+
+async function signupFromSharedLink(
+  email: string,
+  shareToken: string
+) {
+  // 1. Create user account
+  const user = await createUser(email);
+
+  // 2. Fetch share link info
+  const shareLink = await supabase
+    .from('shared_edition_links')
+    .select('id, shared_by_user_id')
+    .eq('share_token', shareToken)
+    .single();
+
+  // 3. Link the referral
+  await supabase
+    .from('share_click_events')
+    .update({
+      converted_user_id: user.id,
+      converted_at: new Date()
+    })
+    .eq('clicked_by_session_id', sessionId);  // from browser session
+
+  // 4. Increment referral counter
+  await supabase
+    .from('shared_edition_links')
+    .update({
+      clicked_by_user_id: [user.id],
+      signup_count: shareLink.signup_count + 1
+    })
+    .eq('id', shareLink.id);
+
+  // 5. Optional: Award referral credits (Phase 8+)
+  // await awardReferralCredits(shareLink.shared_by_user_id, 10);
+
+  return user;
+}
+```
+
+**Analytics Queries:**
+
+```sql
+-- Share link performance
+SELECT
+  sl.share_token,
+  sl.click_count,
+  sl.signup_count,
+  ROUND(sl.signup_count::FLOAT / sl.click_count * 100, 2) as conversion_rate,
+  u.name as shared_by,
+  de.type as edition_type
+FROM shared_edition_links sl
+JOIN users u ON sl.shared_by_user_id = u.id
+JOIN daily_editions de ON sl.edition_id = de.id
+WHERE sl.created_at > NOW() - INTERVAL '7 days'
+ORDER BY sl.click_count DESC;
+
+-- Top sharers
+SELECT
+  u.name,
+  COUNT(sl.id) as total_shares,
+  SUM(sl.click_count) as total_clicks,
+  SUM(sl.signup_count) as total_referrals
+FROM shared_edition_links sl
+JOIN users u ON sl.shared_by_user_id = u.id
+WHERE sl.created_at > NOW() - INTERVAL '30 days'
+GROUP BY u.id, u.name
+ORDER BY total_referrals DESC
+LIMIT 20;
+
+-- Funnel: Clicks → Signups
+SELECT
+  COUNT(DISTINCT sce.clicked_by_session_id) as listeners,
+  COUNT(DISTINCT sce.converted_user_id) as signups,
+  ROUND(
+    COUNT(DISTINCT sce.converted_user_id)::FLOAT /
+    COUNT(DISTINCT sce.clicked_by_session_id) * 100,
+    2
+  ) as conversion_rate
+FROM share_click_events sce
+WHERE sce.clicked_at > NOW() - INTERVAL '7 days';
+```
+
+---
+
+### 5.5 Cache Analytics Dashboard Queries
 
 **SQL Queries for Dashboard:**
 
@@ -1734,33 +2053,110 @@ LIMIT 20;
 
 ---
 
-## Part 7: Success Metrics & KPIs
+## Part 10: Success Metrics & KPIs
 
 ### During Implementation
 
+**Caching & Generation Metrics:**
 1. **Cache Hit Rate (Content Layer)** - Target: 85%+ (currently: unknown)
 2. **Voice Variant Reuse Rate** - Target: 70%+ of requests use cached voices
 3. **API Call Reduction** - Target: 90%+ fewer TTS calls, 95%+ fewer content generation calls
 4. **Generation Success Rate** - Target: 99%+ (with auto-retry)
 5. **User Experience** - Target: Instant load for returning users (<500ms)
 
-### After Full Implementation
+**Shareable Links Metrics (Phase 4+):**
+1. **Share Link Creation Rate** - Target: 20%+ of active users share weekly
+2. **Click-Through Rate** - Target: 15%+ of shares result in a click
+3. **Listener-to-Signup Conversion** - Target: 25%+ of listeners sign up
+4. **Viral Coefficient** - Target: 1.5+ (each user generates 1.5+ new users)
 
+### After Full Implementation (Phase 7)
+
+**Caching & Performance:**
 1. **Cache Hit Rate:** 95%+ (content layer reuse)
 2. **Voice Variant Hit Rate:** 85%+ (users selecting already-generated voices)
-3. **Cost Savings:** 75-85% reduction in API costs vs. current
-4. **Storage Savings:** 50-70% reduction (voice-first architecture)
-5. **User Acquisition:** 20-30% increase via shareable links
-6. **Revenue:** Unified credit system with clear monetization path
-7. **Operational Efficiency:**
-   - Automated generation (3x daily)
-   - Auto-retry for failures (99%+ availability)
-   - Automated cleanup and archival
-   - Real-time monitoring dashboard
+3. **Database Query Reduction:** 90%+ fewer queries (memory cache)
+4. **API Cost Reduction:** 75-85% lower costs vs. current model
+5. **Storage Savings:** 50-70% reduction (voice-first architecture)
+
+**User Growth & Engagement:**
+1. **Share Link Metrics:**
+   - 30%+ of users share at least 1 link per week
+   - 20%+ of listeners convert to signup (Phase 4)
+   - Viral coefficient 1.5+ (exponential growth)
+   - 20-30% of new signups from shared links
+
+2. **Voice Feature Adoption:**
+   - 60%+ of users try different voices
+   - Average 2.5 voices per user
+   - 15%+ use Guided Researcher voice
+
+3. **Credit System Performance:**
+   - 40%+ of Pro users spend monthly credits
+   - Average credit spend: 60 credits/month
+   - 25%+ upgrade from Free to Pro for voice access
+
+**Operational Efficiency:**
+1. **Reliability:** 99%+ generation success rate with auto-retry
+2. **Performance:** <1s median load time for returning users
+3. **Automation:** 100% of daily editions pre-generated on schedule
+4. **Monitoring:** Real-time dashboard with all metrics
+5. **Cost:** Predictable, measurable API spend (-75-85%)
+
+### Phase 8+ (Viral Loop Incentives)
+
+**Referral Program Metrics:**
+1. **Referral Activation:** % of sharers who activate incentives
+2. **Referral Value:** Cost per acquisition via referrals vs. cold ads
+3. **Viral Coefficient:** Exponential growth measurement
+4. **Cohort Retention:** Referred users retention vs. organic
+5. **LTV Impact:** Lifetime value of referred users
 
 ---
 
-## Part 8: Risk Mitigation & Contingency
+## Part 8: Future Enhancement Opportunities (Phase 8+)
+
+### Phase 8: Viral Loop Incentives (After Phases 1-7 Stable)
+
+**Goal:** Leverage referral infrastructure to drive exponential growth
+
+**Note:** Phase 4 builds the **analytics foundation**. Phase 8 implements the **incentive mechanics** on top.
+
+**Potential Incentives:**
+
+```
+Option A: Credits-Based
+- User A shares → Friend signs up → User A gets 10 credits
+- User can spend credits on voice variants or Researcher narration
+
+Option B: Gamification
+- Share leaderboard: "Top 5 sharers this week"
+- Badges: "5 Shares", "10 Shares", "Influencer (50+ shares)"
+- Milestone rewards: "Share 10x → Unlock exclusive voice"
+
+Option C: Tiered Benefits
+- Share 1 person → Friend gets 7-day pro trial
+- Share 5 people → Friend gets 1-month pro
+- Share 10+ people → Permanent 20% discount
+
+Option D: Hybrid
+- Every 3 shares → 5 credits
+- Plus leaderboard + badges
+- Plus special rewards (exclusive early access to features)
+```
+
+**Implementation Tasks (Phase 8):**
+1. Add referral credit logic to sign-up flow
+2. Build referral dashboard ("You've referred X people")
+3. Implement gamification badges
+4. Set up notification triggers ("Friend signed up!")
+5. Create referral analytics dashboard
+
+**Prerequisite:** Phase 4 analytics infrastructure must be solid and generating clean data
+
+---
+
+## Part 9: Risk Mitigation & Contingency
 
 ### Risks:
 
@@ -1795,7 +2191,14 @@ The current VoxTrends caching system is functional but operates on an outdated "
 
 ### Strategic Improvements:
 
-1. **Voice-First Architecture** (90%+ TTS cost reduction)
+1. **Friction-Reduced Growth Model** (Viral acquisition)
+   - Shareable links require no authentication
+   - Zero friction → higher listening rates
+   - Content quality drives organic sharing (not forced incentives)
+   - Trust signal from friend → higher conversion to signup
+   - Analytics infrastructure ready for Phase 8 referral incentives
+
+2. **Voice-First Architecture** (90%+ TTS cost reduction)
    - Generate content once per edition
    - Generate voice variants only on-demand
    - Build voice library over time
@@ -1807,7 +2210,10 @@ The current VoxTrends caching system is functional but operates on an outdated "
    - Admin dashboard for monitoring, not manual triggers
 
 3. **Growth & Monetization** (Viral + Revenue)
-   - Shareable audio links for organic growth
+   - Shareable audio links with zero friction (unauthenticated listening)
+   - Trust-driven conversion: friends share → higher trust → higher signup rate
+   - Content quality as primary driver (fresh news → naturally shared)
+   - Analytics infrastructure foundation (Phase 4) for future referral incentives (Phase 8)
    - Voice-enabled Guided Researcher expansion
    - Unified credit system with clear pricing tiers
    - Natural upsell path to Pro tier
@@ -1820,12 +2226,24 @@ The current VoxTrends caching system is functional but operates on an outdated "
 
 ### Projected Impact:
 
+**Infrastructure & Cost:**
 - **Cost Reduction:** 75-85% lower API costs (vs. current model)
 - **Storage Savings:** 50-70% reduction with voice-first approach
-- **User Experience:** Instant loads + voice choice + shareable links
-- **Revenue:** Multiple monetization levers (credits, voice upgrades)
+- **Performance:** <1s median load for returning users (vs. 5-10s currently)
 - **Reliability:** 99%+ generation success rate with auto-retry
-- **Growth:** Viral sharing mechanism built-in
+
+**User Experience & Growth:**
+- **UX:** Instant loads + clear voice selection + shareable links
+- **Viral Coefficient:** 1.5+ (each user generates 1.5+ new users)
+- **User Acquisition:** 20-30% from shareable links (Phase 4+)
+- **Listener Conversion:** 25%+ of listeners → signup (Phase 4)
+- **Engagement:** 60%+ users try different voices, 15%+ use Researcher voice
+
+**Monetization & Revenue:**
+- **Revenue Levers:** Multiple (credits, voice access, Researcher, referral incentives)
+- **Conversion Path:** Free → explore → share → friend signs up → upgrade to Pro
+- **Upsell:** Clear upgrade path with feature/voice/credit benefits
+- **ARPU Growth:** Unified credit system expands monetization surface
 
 ### Implementation Approach:
 
