@@ -1,8 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import { Music, Loader, Play } from 'lucide-react';
-
 interface VoiceProfile {
   id: 'originals' | 'deep-divers' | 'trendspotters';
   label: string;
@@ -101,7 +98,7 @@ export default function VoiceSelector({
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-6">
         {/* Header */}
         <div className="flex items-center gap-2 mb-4">
-          <Music className="w-5 h-5 text-indigo-600" />
+          <span className="text-2xl">🎤</span>
           <h2 className="text-xl font-semibold text-gray-900">
             Choose Your Hosts
           </h2>
@@ -167,7 +164,7 @@ export default function VoiceSelector({
                         disabled
                         className="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg font-medium text-sm flex items-center gap-2"
                       >
-                        <Loader className="w-4 h-4 animate-spin" />
+                        <span className="inline-block animate-spin">⏳</span>
                         Generating...
                       </button>
                     ) : (
@@ -175,8 +172,7 @@ export default function VoiceSelector({
                         onClick={() => handleGenerateAudio(profile.id)}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm flex items-center gap-2 transition"
                       >
-                        <Music className="w-4 h-4" />
-                        Generate
+                        🎵 Generate
                       </button>
                     )}
                   </div>
@@ -190,8 +186,7 @@ export default function VoiceSelector({
         {selectedVoice && generatedAudio[selectedVoice] && (
           <div className="mt-6 pt-6 border-t border-gray-200">
             <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <Play className="w-4 h-4" />
-              Now Playing
+              ▶️ Now Playing
             </h4>
             <audio
               controls
