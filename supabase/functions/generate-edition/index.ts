@@ -707,10 +707,10 @@ Guidelines:
         );
       }
 
-      // Fetch edition and verify ownership
+      // Fetch edition
       const { data: edition, error: editionError } = await supabaseClient
         .from('daily_editions')
-        .select('id, script, user_id')
+        .select('id, script')
         .eq('id', edition_id)
         .single();
 
@@ -718,13 +718,6 @@ Guidelines:
         return new Response(
           JSON.stringify({ error: 'Edition not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      if (edition.user_id !== user.id) {
-        return new Response(
-          JSON.stringify({ error: 'Access denied: You do not own this edition' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
