@@ -142,6 +142,40 @@ const VOICE_PROFILES = {
 
 type VoiceId = keyof typeof VOICE_PROFILES;
 
+// ==================== SPEAKER REMAPPING ====================
+// The edition script is generated once and cached with one set of host names.
+// When a different voice profile is requested later, we remap the speaker labels
+// so they match what TTS expects — otherwise Gemini collapses to a single voice.
+function remapScriptSpeakers(script: string, targetHosts: { lead: string; expert: string }): string {
+  const speakerPattern = /^([A-Za-z]+):/gm;
+  const speakers: string[] = [];
+  let match;
+  while ((match = speakerPattern.exec(script)) !== null) {
+    if (!speakers.includes(match[1])) {
+      speakers.push(match[1]);
+    }
+    if (speakers.length === 2) break;
+  }
+
+  if (speakers.length !== 2) return script;
+
+  const [existingLead, existingExpert] = speakers;
+  if (existingLead === targetHosts.lead && existingExpert === targetHosts.expert) {
+    return script; // Already matches — nothing to do
+  }
+
+  // Use placeholders to avoid double-replacement (e.g., if Alex→Marcus and Marcus→Elena)
+  let remapped = script
+    .replace(new RegExp(`^${existingLead}:`, 'gm'), '__LEAD_PLACEHOLDER__:')
+    .replace(new RegExp(`^${existingExpert}:`, 'gm'), '__EXPERT_PLACEHOLDER__:');
+  remapped = remapped
+    .replace(/__LEAD_PLACEHOLDER__:/g, `${targetHosts.lead}:`)
+    .replace(/__EXPERT_PLACEHOLDER__:/g, `${targetHosts.expert}:`);
+
+  console.log(`🔤 Remapped speakers: ${existingLead}→${targetHosts.lead}, ${existingExpert}→${targetHosts.expert}`);
+  return remapped;
+}
+
 // ==================== REQUEST COALESCING ====================
 const inFlightVariants = new Map<string, Promise<any>>();
 
@@ -298,9 +332,12 @@ serve(async (req) => {
       const voiceProfile = VOICE_PROFILES[voice_id as VoiceId];
       const gemini = new GeminiService(Deno.env.get('GEMINI_API_KEY') ?? '');
 
+      // Remap speaker labels if the script was generated with a different voice profile
+      const scriptForTTS = remapScriptSpeakers(edition.script, voiceProfile.hosts);
+
       // Generate audio
       const audioResult = await gemini.generateAudio(
-        edition.script,
+        scriptForTTS,
         voiceProfile.voices.lead,
         voiceProfile.voices.expert,
         voiceProfile.hosts.lead,
