@@ -74,6 +74,36 @@ const VOICE_PROFILES = {
 
 type VoiceId = keyof typeof VOICE_PROFILES;
 
+// ==================== SPEAKER REMAPPING ====================
+function remapScriptSpeakers(script: string, targetHosts: { lead: string; expert: string }): string {
+  const speakerPattern = /^([A-Za-z]+):/gm;
+  const speakers: string[] = [];
+  let match;
+  while ((match = speakerPattern.exec(script)) !== null) {
+    if (!speakers.includes(match[1])) {
+      speakers.push(match[1]);
+    }
+    if (speakers.length === 2) break;
+  }
+
+  if (speakers.length !== 2) return script;
+
+  const [existingLead, existingExpert] = speakers;
+  if (existingLead === targetHosts.lead && existingExpert === targetHosts.expert) {
+    return script;
+  }
+
+  let remapped = script
+    .replace(new RegExp(`^${existingLead}:`, 'gm'), '__LEAD_PLACEHOLDER__:')
+    .replace(new RegExp(`^${existingExpert}:`, 'gm'), '__EXPERT_PLACEHOLDER__:');
+  remapped = remapped
+    .replace(/__LEAD_PLACEHOLDER__:/g, `${targetHosts.lead}:`)
+    .replace(/__EXPERT_PLACEHOLDER__:/g, `${targetHosts.expert}:`);
+
+  console.log(`🔤 Remapped speakers: ${existingLead}→${targetHosts.lead}, ${existingExpert}→${targetHosts.expert}`);
+  return remapped;
+}
+
 // ==================== GEMINI SERVICE ====================
 
 // Helper: Create WAV header for PCM audio (24kHz, 16-bit, mono)
@@ -225,16 +255,26 @@ class GeminiService {
         - ${hostLead}: High-energy, charismatic main host.
         - ${hostExpert}: Intelligent, analytical research expert.
 
-        Format:
-        ${hostLead}: [Welcome and hook]
-        ${hostExpert}: [Detailed analysis of trends]
-        ${hostLead}: [Closing and sign-off]
+        CRITICAL FORMAT RULES:
+        - EVERY single line of dialogue MUST start with either "${hostLead}:" or "${hostExpert}:" followed by a space. No exceptions. No unmarked lines.
+        - Switch speakers every 2-3 sentences at most. Do NOT write long monologue blocks for either host.
+        - Both hosts must speak roughly equally throughout.
+        - Write it as a natural, dynamic back-and-forth conversation — not a presentation.
+
+        Structure:
+        ${hostLead}: [Hook — one punchy, surprising statement to grab attention]
+        ${hostExpert}: [React, add context — 2 sentences max]
+        ${hostLead}: [Follow-up or transition — 1-2 sentences]
+        ${hostExpert}: [First story detail — 2-3 sentences]
+        ${hostLead}: [Commentary or question — 1-2 sentences]
+        ${hostExpert}: [Expand or move to next story — 2-3 sentences]
+        ... [continue alternating through all major stories this way]
+        ${hostLead}: [Closing sign-off — 1-2 sentences]
 
         STYLE GUIDELINES:
-        - Make the opening hook punchy and attention-grabbing — reference the most surprising or emotionally charged detail from the news.
-        - ${hostExpert} should weave in specific real-world data points, expert opinions, and social media reactions to make analysis feel grounded and current.
-        - Vary the conversational rhythm: mix quick back-and-forth exchanges with longer explanatory segments.
-        - Each edition should feel distinct in energy and angle — avoid generic summaries. Lead with what is genuinely novel or unexpected.
+        - Lead with the most surprising or emotionally charged detail from the news.
+        - ${hostExpert} should weave in specific data points, expert opinions, and social media reactions.
+        - Each edition should feel distinct in energy and angle — avoid generic summaries.
 
         Output only the script text. Do not use emojis.` }]
         }],
@@ -707,8 +747,9 @@ serve(async (req) => {
           try {
             console.log('🎙️ Generating audio for cached edition with voice profile:', voiceId);
             const gemini = new GeminiService(Deno.env.get('GEMINI_API_KEY') ?? '');
+            const scriptForTTS = remapScriptSpeakers(cachedEdition.script, voiceProfile.hosts);
             const audioResult = await gemini.generateAudio(
-              cachedEdition.script,
+              scriptForTTS,
               voiceProfile.voices.lead,
               voiceProfile.voices.expert,
               voiceProfile.hosts.lead,
