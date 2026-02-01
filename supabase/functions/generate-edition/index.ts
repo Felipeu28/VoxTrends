@@ -658,24 +658,26 @@ ${context}
 
       prompt += `User: ${question}
 
+You have access to web search. Use it to find information that goes BEYOND what the news context above provides. The context gives you the baseline — search to fill the gaps, verify claims, and find what the reporting left out.
+
 RESPONSE FORMAT — follow this structure exactly:
 
 **What the sources say:**
-Summarize what the news context actually reports on this topic. Be precise — cite specific claims, names, and numbers from the context. Do not pad or repeat.
+Summarize what is reported on this topic — from both the news context AND what you found via search. Be precise: cite specific claims, names, numbers, and dates. If the original context and fresh sources contradict each other, flag it.
 
 **What's missing or left unsaid:**
-This is the core of the analysis. Identify what the reporting does NOT cover: whose voices are absent, what questions no one is asking, what context would change how readers interpret this, what incentives or power dynamics are invisible in the coverage. Be specific and direct.
+This is the core. What is the reporting NOT covering? Whose voices are absent? What questions is no one asking? What context — found via your search — would change how people understand this? What incentives or power dynamics are invisible? Be specific and direct.
 
 **Why it matters:**
-Connect this to broader patterns. What does this reveal about how this issue actually works — politically, economically, socially? Keep it grounded in what the context supports, but draw the real-world implications.
+Connect this to broader patterns. What does this reveal about how this issue actually works — politically, economically, socially? Ground it in what you found, not speculation.
 
 **You might also explore:**
 End with exactly 2 follow-up questions that would push the investigation deeper. Make them specific, not generic.
 
 GUIDELINES:
 - Language: ${qLanguage || 'English'}. Write entirely in this language.
-- Be direct. No hedging, no filler, no "great question" preamble.
-- If the context doesn't cover something the user asked about, say so plainly in the first section — don't fabricate.
+- Be direct. No hedging, no filler, no preamble.
+- Search actively. Do not stay inside the box of what the edition text already says — that's what people already read. They came here to go deeper.
 - The "What's missing" section is the most important. This is where people come to find the truth.`;
 
       try {
@@ -683,6 +685,9 @@ GUIDELINES:
         const response = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
           contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
         });
 
         const answer = response.text || 'Unable to generate an answer.';
