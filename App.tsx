@@ -307,8 +307,35 @@ const InterrogationHub: React.FC<{
   const t = translations[language as keyof typeof translations] || translations.English;
   const [question, setQuestion] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [listening, setListening] = useState(false);
   const [collapsed, setCollapsed] = useState(true); // Start collapsed on mobile
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const speechLang = language === 'Spanish' ? 'es-ES' : 'en-US';
+
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    const rec = new SpeechRecognition();
+    rec.lang = speechLang;
+    rec.interimResults = false;
+    rec.onstart = () => setListening(true);
+    rec.onresult = (e: any) => {
+      const transcript = e.results[0][0].transcript;
+      setQuestion(transcript);
+      setListening(false);
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    recognitionRef.current = rec;
+    rec.start();
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    setListening(false);
+  };
 
   useEffect(() => {
     if (!collapsed && history.length > 0) {
@@ -388,19 +415,35 @@ const InterrogationHub: React.FC<{
           <div className="relative">
             <input
               type="text"
-              placeholder="Ask anything about this news..."
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 md:py-6 px-4 md:px-8 pr-20 md:pr-24 text-base md:text-lg focus:outline-none focus:border-violet-600 transition-colors"
+              placeholder={listening ? (language === 'Spanish' ? 'Escuchando...' : 'Listening...') : 'Ask anything about this news...'}
+              className={`w-full bg-zinc-900 border rounded-2xl py-4 md:py-6 px-4 md:px-8 pr-28 md:pr-36 text-base md:text-lg focus:outline-none transition-colors ${listening ? 'border-violet-600 animate-pulse' : 'border-zinc-800 focus:border-violet-600'}`}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
             />
-            <button
-              onClick={handleAsk}
-              disabled={thinking || !question.trim()}
-              className="absolute right-2 top-2 bottom-2 px-4 md:px-6 bg-violet-600 text-white rounded-xl font-black text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-violet-700 transition-all"
-            >
-              ASK
-            </button>
+            <div className="absolute right-2 top-2 bottom-2 flex items-center gap-1.5">
+              <button
+                onClick={listening ? stopListening : startListening}
+                disabled={thinking}
+                className={`px-3 h-full rounded-xl flex items-center justify-center transition-all disabled:opacity-40 ${listening ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'}`}
+                title={listening ? 'Stop' : 'Ask with voice'}
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  {listening ? (
+                    <rect x="6" y="6" width="12" height="12" rx="2" fill="white" />
+                  ) : (
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z"/>
+                  )}
+                </svg>
+              </button>
+              <button
+                onClick={handleAsk}
+                disabled={thinking || !question.trim()}
+                className="px-4 md:px-6 h-full bg-violet-600 text-white rounded-xl font-black text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-violet-700 transition-all"
+              >
+                ASK
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -1185,12 +1228,10 @@ const App: React.FC = () => {
                 >
                   <option value="Global">Global 🌎</option>
                   <option value="USA">USA 🇺🇸</option>
-                  <option value="UK">UK 🇬🇧</option>
+                  <option value="Europe">Europe 🇪🇺</option>
+                  <option value="Asia">Asia 🌏</option>
                   <option value="Colombia">Colombia 🇨🇴</option>
-                  <option value="Brazil">Brazil 🇧🇷</option>
-                  <option value="Mexico">Mexico 🇲🇽</option>
-                  <option value="Argentina">Argentina 🇦🇷</option>
-                  <option value="Spain">Spain 🇪🇸</option>
+                  <option value="Venezuela">Venezuela 🇻🇪</option>
                 </select>
               </div>
               <div className="space-y-3">
@@ -1208,7 +1249,6 @@ const App: React.FC = () => {
                 >
                   <option value="English">English 🇬🇧</option>
                   <option value="Spanish">Spanish 🇪🇸</option>
-                  <option value="Portuguese">Portuguese 🇧🇷</option>
                 </select>
               </div>
               <div className="pt-6 border-t border-zinc-800 space-y-3">
@@ -1331,12 +1371,10 @@ const App: React.FC = () => {
             >
               <option value="Global">Global 🌎</option>
               <option value="USA">USA 🇺🇸</option>
-              <option value="UK">UK 🇬🇧</option>
+              <option value="Europe">Europe 🇪🇺</option>
+              <option value="Asia">Asia 🌏</option>
               <option value="Colombia">Colombia 🇨🇴</option>
-              <option value="Brazil">Brazil 🇧🇷</option>
-              <option value="Mexico">Mexico 🇲🇽</option>
-              <option value="Argentina">Argentina 🇦🇷</option>
-              <option value="Spain">Spain 🇪🇸</option>
+              <option value="Venezuela">Venezuela 🇻🇪</option>
             </select>
           </div>
 
@@ -1355,7 +1393,6 @@ const App: React.FC = () => {
             >
               <option value="English">English 🇬🇧</option>
               <option value="Spanish">Spanish 🇪🇸</option>
-              <option value="Portuguese">Portuguese 🇧🇷</option>
             </select>
           </div>
 
