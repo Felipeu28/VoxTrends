@@ -19,18 +19,12 @@ const VOICE_PROFILES: VoiceProfile[] = [
 interface VoiceSelectorProps {
   editionId: string;
   isScriptReady: boolean;
-  editionType: 'Morning' | 'Midday' | 'Evening';
-  region: string;
-  language: string;
   onAudioGenerated?: (voiceId: string, audioUrl: string) => void;
 }
 
 export default function VoiceSelector({
   editionId,
   isScriptReady,
-  editionType,
-  region,
-  language,
   onAudioGenerated,
 }: VoiceSelectorProps) {
   const [selected, setSelected] = useState<string>('originals');
@@ -42,9 +36,7 @@ export default function VoiceSelector({
     setError(null);
 
     try {
-      const result = await backend.generateEdition(
-        editionType, region, language, false, selected, true
-      );
+      const result = await backend.generateVoiceVariant(editionId, selected);
 
       const audioUrl = result.data?.audio;
       if (!audioUrl) throw new Error('No audio returned');
