@@ -197,9 +197,11 @@ class GeminiService {
           role: 'user', parts: [{
             text: `[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
+        LANGUAGE: All output MUST be written entirely in ${language}. Search for news sources in ${language} from ${region}. Headlines, analysis, and every sentence must be in ${language}. Do NOT mix languages or output anything in English if ${language} is not English.
+
         You are an expert news analyst and investigative journalist.
         Research the top 5 most significant news topics and trending stories from ${timeFocus} in ${region}.
-        Include stories that are trending on social media platforms including X (Twitter), Reddit, and other public forums.
+        Include stories that are trending on social media platforms including X (Twitter), Reddit, and other public forums relevant to ${region}.
         ${thematicFocus}
         ${dedupInstruction}
         For EACH of the top 5 topics, you MUST provide a comprehensive and detailed report.
@@ -212,10 +214,9 @@ class GeminiService {
         - DO NOT include ANY introductory text, acknowledging filler, or meta-talk (e.g., "Okay, I will investigate...", "Based on my research...", "Here are the top stories...").
         - START DIRECTLY with the first news report.
 
-        Format the output as a high-quality journalistic deep-dive in ${language}.
         You MAY use simple markdown like headers (#) and bolding (**) for readability.
         DO NOT use emojis.
-        Be extremely informative. Focus on qualitative density. We need high-quality content for a 2-minute podcast.` }]
+        Be extremely informative. Focus on qualitative density. We need high-quality content for a podcast.` }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
@@ -262,8 +263,8 @@ class GeminiService {
 
         LENGTH — STRICT:
         - This is a ${duration} briefing at a natural conversational pace (~150 words/minute).
-        - Total script must be 280-320 words. Do NOT exceed 320 words.
-        - Cover the 2-3 most important stories only. Depth over breadth — don't rush through everything.
+        - Total script must be 350-385 words. Do NOT exceed 385 words.
+        - Cover the 3 most important stories. Depth over breadth — don't rush through everything.
 
         FORMAT RULES:
         - EVERY single line of dialogue MUST start with either "${hostLead}:" or "${hostExpert}:" followed by a space. No exceptions.
@@ -657,12 +658,25 @@ ${context}
 
       prompt += `User: ${question}
 
-Guidelines:
-- Answer based strictly on the provided news context. If the context doesn't cover something, say so explicitly rather than speculating.
-- Highlight what is NOT being reported or what perspectives are missing — this builds critical thinking.
-- Be direct and specific. Avoid vague generalities.
-- At the end of your answer, suggest 1-2 follow-up questions that would deepen understanding. Format them clearly as: "You might also explore: ..."
-- Language: ${qLanguage || 'English'}`;
+RESPONSE FORMAT — follow this structure exactly:
+
+**What the sources say:**
+Summarize what the news context actually reports on this topic. Be precise — cite specific claims, names, and numbers from the context. Do not pad or repeat.
+
+**What's missing or left unsaid:**
+This is the core of the analysis. Identify what the reporting does NOT cover: whose voices are absent, what questions no one is asking, what context would change how readers interpret this, what incentives or power dynamics are invisible in the coverage. Be specific and direct.
+
+**Why it matters:**
+Connect this to broader patterns. What does this reveal about how this issue actually works — politically, economically, socially? Keep it grounded in what the context supports, but draw the real-world implications.
+
+**You might also explore:**
+End with exactly 2 follow-up questions that would push the investigation deeper. Make them specific, not generic.
+
+GUIDELINES:
+- Language: ${qLanguage || 'English'}. Write entirely in this language.
+- Be direct. No hedging, no filler, no "great question" preamble.
+- If the context doesn't cover something the user asked about, say so plainly in the first section — don't fabricate.
+- The "What's missing" section is the most important. This is where people come to find the truth.`;
 
       try {
         const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY') ?? '' });
@@ -1047,7 +1061,7 @@ Guidelines:
       script = await gemini.generatePodcastScript(
         trendingNews,
         language,
-        '2:00',
+        '2:30',
         voiceProfile.hosts.lead,
         voiceProfile.hosts.expert
       );
