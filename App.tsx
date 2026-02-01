@@ -170,9 +170,9 @@ const AudioPlayer: React.FC<{
       <audio ref={audioRef} src={audioSrc} preload="metadata" onEnded={onEnded} />
       <button
         onClick={onPlayPause}
-        className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-3xl flex items-center justify-center shadow-2xl hover:scale-105 transition-all text-black"
+        className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-all text-black"
       >
-        {isPlaying ? <ICONS.Pause className="w-8 h-8 md:w-10 md:h-10" /> : <ICONS.Play className="w-8 h-8 md:w-10 md:h-10 ml-1" />}
+        {isPlaying ? <ICONS.Pause className="w-4 h-4" /> : <ICONS.Play className="w-4 h-4 ml-0.5" />}
       </button>
     </>
   );
@@ -1479,7 +1479,7 @@ const App: React.FC = () => {
                 {/* Audio Player - Show if audio exists */}
                 {currentDaily && currentDaily.audio && (
                   <>
-                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden flex justify-center">
+                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 relative overflow-hidden flex justify-center">
                     <AudioPlayer
                       audioData={currentDaily.audio}
                       clipId={`edition-${activeTab}`}
