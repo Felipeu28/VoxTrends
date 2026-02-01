@@ -307,8 +307,28 @@ const InterrogationHub: React.FC<{
   const t = translations[language as keyof typeof translations] || translations.English;
   const [question, setQuestion] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [collapsed, setCollapsed] = useState(true); // Start collapsed on mobile
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const SpeechRecognitionClass = typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  const startListening = () => {
+    if (!SpeechRecognitionClass) return;
+    const recognition = new SpeechRecognitionClass();
+    const langMap: Record<string, string> = { English: 'en-US', Spanish: 'es-ES', Portuguese: 'pt-BR', French: 'fr-FR', German: 'de-DE' };
+    recognition.lang = langMap[language] || 'en-US';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setQuestion(prev => prev ? `${prev} ${transcript}` : transcript);
+      setIsListening(false);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+    setIsListening(true);
+  };
 
   useEffect(() => {
     if (!collapsed && history.length > 0) {
@@ -406,19 +426,31 @@ const InterrogationHub: React.FC<{
           <div className="relative">
             <input
               type="text"
-              placeholder="Ask anything about this news..."
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 md:py-6 px-4 md:px-8 pr-20 md:pr-24 text-base md:text-lg focus:outline-none focus:border-violet-600 transition-colors"
+              placeholder={isListening ? t.listening : "Ask anything about this news..."}
+              className={`w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 md:py-6 px-4 md:px-8 text-base md:text-lg focus:outline-none focus:border-violet-600 transition-colors ${SpeechRecognitionClass ? 'pr-36 md:pr-40' : 'pr-20 md:pr-24'}`}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
+              disabled={isListening}
             />
-            <button
-              onClick={handleAsk}
-              disabled={thinking || !question.trim()}
-              className="absolute right-2 top-2 bottom-2 px-4 md:px-6 bg-violet-600 text-white rounded-xl font-black text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-violet-700 transition-all"
-            >
-              ASK
-            </button>
+            <div className="absolute right-2 top-2 bottom-2 flex items-center gap-1.5">
+              {SpeechRecognitionClass && (
+                <button
+                  onClick={startListening}
+                  disabled={thinking || isListening}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isListening ? 'bg-red-500/20 text-red-400 animate-pulse' : 'text-zinc-500 hover:text-violet-400 hover:bg-zinc-800'} disabled:opacity-50`}
+                >
+                  <ICONS.Mic className="w-5 h-5" />
+                </button>
+              )}
+              <button
+                onClick={handleAsk}
+                disabled={thinking || !question.trim() || isListening}
+                className="h-full px-4 md:px-6 bg-violet-600 text-white rounded-xl font-black text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-violet-700 transition-all"
+              >
+                ASK
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -1463,12 +1495,19 @@ const App: React.FC = () => {
                   </div>
 
                   {currentDaily && (
-                    <div className="mt-8">
+                    <div className="mt-8 flex items-center gap-3 flex-wrap">
                       <button
                         onClick={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
                         className="px-6 py-3 bg-emerald-600 border border-emerald-700 rounded-xl text-sm font-black tracking-wide text-white hover:bg-emerald-700 transition-all shadow-lg"
                       >
                         💾 SAVE
+                      </button>
+                      <button
+                        onClick={() => handleGenerateDaily(activeTab, true)}
+                        disabled={loading}
+                        className="px-6 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-black tracking-wide text-zinc-400 hover:border-violet-600 hover:text-violet-400 transition-all disabled:opacity-50"
+                      >
+                        🔄 REFRESH
                       </button>
                     </div>
                   )}
@@ -1613,17 +1652,53 @@ const App: React.FC = () => {
                     </div>
                   )}
 
-                {!currentDaily && !loading && (
-                  <div className="py-24 flex flex-col items-center justify-center text-zinc-800 opacity-20">
-                    <ICONS.Podcast className="w-20 h-20 mb-4" />
-                    <p className="font-serif italic text-lg">Broadcast offline. Sync to begin.</p>
-                  </div>
-                )}
               </div>
 
-              {/* Research Panel - Ask Questions */}
+              {/* Research & Q&A Panel */}
               {currentDaily && (
-              <div id="research-section" className="lg:col-span-4 space-y-8">
+              <div id="research-section" className="lg:col-span-4 space-y-6">
+                {/* Research Section */}
+                <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-8 space-y-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center">
+                      <ICONS.Search className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-serif font-bold text-white">Research</h4>
+                      <p className="text-xs text-zinc-500">Deep-dive any topic</p>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Target a topic..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-3 px-4 pr-16 text-sm focus:outline-none focus:border-emerald-600 transition-colors"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleConductResearch()}
+                    />
+                    <button
+                      onClick={handleConductResearch}
+                      disabled={loading || !searchQuery.trim()}
+                      className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-emerald-600 text-white rounded-lg font-black text-xs disabled:opacity-50 hover:bg-emerald-700 transition-all"
+                    >
+                      GO
+                    </button>
+                  </div>
+                  {researchResult && (
+                    <>
+                      <ResearchDisplay result={researchResult} language={language} />
+                      <button
+                        onClick={() => saveToVault(`Research: ${searchQuery}`, researchResult, 'Research')}
+                        className="w-full px-4 py-2.5 bg-emerald-600/10 border border-emerald-600/30 text-emerald-400 hover:bg-emerald-600/20 rounded-xl text-sm font-bold transition-all"
+                      >
+                        💾 Save Research
+                      </button>
+                    </>
+                  )}
+                </section>
+
+                {/* Q&A Section */}
                 <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-8 sticky top-10">
                   <InterrogationHub
                     context={currentDaily.text}
