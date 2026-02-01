@@ -135,20 +135,16 @@ const AudioPlayer: React.FC<{
 }> = ({ audioData, clipId, isPlaying, onPlayPause, onEnded }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     if (!audioData) return;
-
-    // Check if it's a URL or base64
     if (audioData.startsWith('http')) {
-      // It's already a URL from Supabase
       setAudioSrc(audioData);
     } else {
-      // It's base64, convert to blob URL
       const blobUrl = createAudioBlobUrl(audioData);
       setAudioSrc(blobUrl);
-
-      // Cleanup blob URL when component unmounts
       return () => URL.revokeObjectURL(blobUrl);
     }
   }, [audioData]);
@@ -163,18 +159,49 @@ const AudioPlayer: React.FC<{
     }
   }, [isPlaying, audioSrc]);
 
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+  };
+
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
   if (!audioSrc) return null;
 
+  const progress = duration ? (currentTime / duration) * 100 : 0;
+
   return (
-    <>
-      <audio ref={audioRef} src={audioSrc} preload="metadata" onEnded={onEnded} />
+    <div className="flex items-center gap-3.5 w-full max-w-xs">
+      <audio
+        ref={audioRef}
+        src={audioSrc}
+        preload="metadata"
+        onEnded={onEnded}
+        onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+        onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)}
+      />
       <button
         onClick={onPlayPause}
-        className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-all text-black"
+        className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-md hover:scale-105 transition-all text-black flex-shrink-0"
       >
-        {isPlaying ? <ICONS.Pause className="w-4 h-4" /> : <ICONS.Play className="w-4 h-4 ml-0.5" />}
+        {isPlaying ? <ICONS.Pause className="w-3.5 h-3.5" /> : <ICONS.Play className="w-3.5 h-3.5 ml-0.5" />}
       </button>
-    </>
+      <div className="flex-1 space-y-1.5 min-w-0">
+        <div
+          className="w-full h-1 bg-zinc-800 rounded-full cursor-pointer group"
+          onClick={handleSeek}
+        >
+          <div className="h-full bg-violet-600 rounded-full relative" style={{ width: `${progress}%` }}>
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </div>
+        <div className="flex justify-between text-[10px] text-zinc-600 font-mono">
+          <span>{fmt(currentTime)}</span>
+          <span>{fmt(duration)}</span>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -1544,14 +1571,9 @@ const App: React.FC = () => {
 
                       <RichText text={currentDaily.text} language={language} />
 
-                      {/* Section Divider */}
-                      <div className="my-8 md:my-10 flex items-center gap-4">
-                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-700 to-transparent"></div>
-                      </div>
-
                       {/* Grounding Links */}
                       {currentDaily.links && currentDaily.links.length > 0 && (
-                        <details className="group border-t border-zinc-800 pt-6 md:pt-8">
+                        <details open className="group border-t border-zinc-800 pt-6 md:pt-8">
                           <summary className="flex items-center justify-between cursor-pointer list-none">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">

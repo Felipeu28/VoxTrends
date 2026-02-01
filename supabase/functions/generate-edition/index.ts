@@ -248,33 +248,37 @@ class GeminiService {
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
-            text: `Showrunner: 'VoxTrends'. Create a ${duration} podcast briefing for these trends: ${trends}.
+            text: `You are writing a podcast script for VoxTrends, a daily news briefing show. Create a ${duration} episode based on these trends: ${trends}.
         Language: ${language}.
 
         Hosts:
-        - ${hostLead}: High-energy, charismatic main host.
-        - ${hostExpert}: Intelligent, analytical research expert.
+        - ${hostLead}: High-energy, charismatic main host. Real person, warm personality.
+        - ${hostExpert}: Intelligent, analytical research expert. Grounded and sharp.
 
-        CRITICAL FORMAT RULES:
-        - EVERY single line of dialogue MUST start with either "${hostLead}:" or "${hostExpert}:" followed by a space. No exceptions. No unmarked lines.
-        - Switch speakers every 2-3 sentences at most. Do NOT write long monologue blocks for either host.
-        - Both hosts must speak roughly equally throughout.
-        - Write it as a natural, dynamic back-and-forth conversation — not a presentation.
+        BRANDING — NON-NEGOTIABLE:
+        - The FIRST line must be ${hostLead} welcoming listeners to VoxTrends BY NAME and introducing themselves. Example: "${hostLead}: Welcome back to VoxTrends, I'm ${hostLead} — and today we've got a big one."
+        - The LAST line must be ${hostLead} signing off with VoxTrends. Example: "${hostLead}: That's your VoxTrends briefing for today. Stay curious, stay sharp — I'm ${hostLead}, see you next time."
+        - These are real, named podcast hosts. They should feel like actual people, not a generic AI summary.
+
+        LENGTH — STRICT:
+        - This is a ${duration} briefing at a natural conversational pace (~150 words/minute).
+        - Total script must be 280-320 words. Do NOT exceed 320 words.
+        - Cover the 2-3 most important stories only. Depth over breadth — don't rush through everything.
+
+        FORMAT RULES:
+        - EVERY single line of dialogue MUST start with either "${hostLead}:" or "${hostExpert}:" followed by a space. No exceptions.
+        - Switch speakers every 2-3 sentences. No long monologue blocks.
+        - Both hosts speak roughly equally. Write it as a natural back-and-forth conversation.
 
         Structure:
-        ${hostLead}: [Hook — one punchy, surprising statement to grab attention]
+        ${hostLead}: [VoxTrends welcome + hook — the most surprising detail]
         ${hostExpert}: [React, add context — 2 sentences max]
-        ${hostLead}: [Follow-up or transition — 1-2 sentences]
-        ${hostExpert}: [First story detail — 2-3 sentences]
-        ${hostLead}: [Commentary or question — 1-2 sentences]
-        ${hostExpert}: [Expand or move to next story — 2-3 sentences]
-        ... [continue alternating through all major stories this way]
-        ${hostLead}: [Closing sign-off — 1-2 sentences]
-
-        STYLE GUIDELINES:
-        - Lead with the most surprising or emotionally charged detail from the news.
-        - ${hostExpert} should weave in specific data points, expert opinions, and social media reactions.
-        - Each edition should feel distinct in energy and angle — avoid generic summaries.
+        ${hostLead}: [Follow-up question or transition]
+        ${hostExpert}: [First story — 2-3 sentences with specific details]
+        ${hostLead}: [Commentary or bridge to next story]
+        ${hostExpert}: [Second story — 2-3 sentences]
+        ... [continue alternating, 2-3 stories max]
+        ${hostLead}: [VoxTrends sign-off]
 
         Output only the script text. Do not use emojis.` }]
         }],
@@ -936,7 +940,7 @@ Guidelines:
       script = await gemini.generatePodcastScript(
         trendingNews,
         language,
-        '1:30',
+        '2:00',
         voiceProfile.hosts.lead,
         voiceProfile.hosts.expert
       );
