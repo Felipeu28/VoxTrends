@@ -139,7 +139,7 @@ class GeminiService {
     this.apiKey = apiKey;
   }
 
-  async fetchTrendingNews(region: string, language: string, editionType: string = 'Daily') {
+  async fetchTrendingNews(region: string, language: string, editionType: string = 'Daily', previousTopics: string = '') {
     try {
       let timeFocus = "the last 24 hours";
       let thematicFocus = "";
@@ -155,27 +155,33 @@ class GeminiService {
         thematicFocus = "Focus on the final outcomes of today's big stories and what is trending as the day comes to a close.";
       }
 
+      const dedupInstruction = previousTopics
+        ? `\n        DEDUPLICATION: Earlier editions today already covered these topics: ${previousTopics}. Do NOT repeat any of these as a main topic. Pick fresh, distinct stories that complement what was already covered.\n`
+        : '';
+
       console.log(`Generating detailed ${editionType} news briefing for ${region} in ${language}...`);
+      console.log(previousTopics ? `Dedup active — excluding ${previousTopics.split(',').length} previous topics` : 'No previous topics to deduplicate');
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
             text: `[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
-        
-        You are an expert news analyst and investigative journalist. 
+
+        You are an expert news analyst and investigative journalist.
         Research the top 5 most significant news topics and trending stories from ${timeFocus} in ${region}.
+        Include stories that are trending on social media platforms including X (Twitter), Reddit, and other public forums.
         ${thematicFocus}
-        
+        ${dedupInstruction}
         For EACH of the top 5 topics, you MUST provide a comprehensive and detailed report.
-        
+
         CRITICAL CONSTRAINTS:
         - NEVER use numbered lists.
         - Use 3-4 LONG paragraphs with deep context and analysis for EACH topic.
-        - Describe why it is trending and the atmosphere of the social conversation.
+        - Describe why it is trending and the atmosphere of the social conversation, especially on X (Twitter).
         - Include specific data, names, background history, and different societal perspectives.
         - DO NOT include ANY introductory text, acknowledging filler, or meta-talk (e.g., "Okay, I will investigate...", "Based on my research...", "Here are the top stories...").
         - START DIRECTLY with the first news report.
-        
+
         Format the output as a high-quality journalistic deep-dive in ${language}.
         You MAY use simple markdown like headers (#) and bolding (**) for readability.
         DO NOT use emojis.
@@ -223,6 +229,12 @@ class GeminiService {
         ${hostLead}: [Welcome and hook]
         ${hostExpert}: [Detailed analysis of trends]
         ${hostLead}: [Closing and sign-off]
+
+        STYLE GUIDELINES:
+        - Make the opening hook punchy and attention-grabbing — reference the most surprising or emotionally charged detail from the news.
+        - ${hostExpert} should weave in specific real-world data points, expert opinions, and social media reactions to make analysis feel grounded and current.
+        - Vary the conversational rhythm: mix quick back-and-forth exchanges with longer explanatory segments.
+        - Each edition should feel distinct in energy and angle — avoid generic summaries. Lead with what is genuinely novel or unexpected.
 
         Output only the script text. Do not use emojis.` }]
         }],
@@ -755,8 +767,40 @@ serve(async (req) => {
     };
 
     // Step 1: Fetch trending news (REQUIRED - this is the core content)
+    // First, gather topics from other editions generated today for the same region/language
+    // so we can deduplicate and keep each edition feeling fresh
+    let previousTopics = '';
+    try {
+      const { data: siblingEditions } = await supabaseClient
+        .from('daily_editions')
+        .select('content')
+        .eq('region', region)
+        .eq('language', language)
+        .eq('date', today)
+        .neq('edition_type', editionType);
+
+      if (siblingEditions && siblingEditions.length > 0) {
+        // Extract the first heading from each sibling edition as a topic summary
+        const topics = siblingEditions.map((ed: any) => {
+          const heading = (ed.content || '').split('\n')
+            .find((line: string) => line.trim().length > 5)
+            ?.replace(/[*#]/g, '')
+            ?.trim()
+            ?.slice(0, 80);
+          return heading;
+        }).filter(Boolean);
+
+        if (topics.length > 0) {
+          previousTopics = topics.join(', ');
+          console.log(`Found ${topics.length} sibling edition(s) — passing topics for dedup`);
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to fetch sibling editions for dedup (non-fatal):', e);
+    }
+
     console.log('Fetching trending news...');
-    const { text: trendingNews, grounding: groundingLinks } = await gemini.fetchTrendingNews(region, language, editionType);
+    const { text: trendingNews, grounding: groundingLinks } = await gemini.fetchTrendingNews(region, language, editionType, previousTopics);
     console.log('Trending news fetched, length:', trendingNews.length);
 
     if (!trendingNews || trendingNews.length < 50) {
