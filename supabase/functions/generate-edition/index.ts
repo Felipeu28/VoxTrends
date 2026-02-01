@@ -570,15 +570,16 @@ serve(async (req) => {
     }
 
     const { editionType, region, language, forceRefresh, voiceId = 'originals', generateAudio = false } = body;
+    const isAskAction = body.action === 'ask';
 
-    console.log('Edition request:', { editionType, region, language, forceRefresh, voiceId });
+    console.log(isAskAction ? 'Q&A request received' : 'Edition request:', { editionType, region, language, forceRefresh, voiceId });
 
     // Select voice profile
     const profileKey = (VOICE_PROFILES[voiceId as VoiceId] ? voiceId : 'originals') as VoiceId;
     const voiceProfile = VOICE_PROFILES[profileKey];
 
-    // Validate inputs
-    if (!editionType || !region || !language) {
+    // Validate edition inputs (skip for Q&A action)
+    if (!isAskAction && (!editionType || !region || !language)) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: editionType, region, language' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -617,6 +618,69 @@ serve(async (req) => {
     }
 
     console.log('User authenticated:', user.id);
+
+    // ==================== Q&A ACTION ====================
+    // ask-question is routed here because it was never deployed as a standalone function.
+    // This early-returns before any edition logic runs.
+    if (isAskAction) {
+      const { context, question, history, language: qLanguage } = body;
+
+      if (!context || !question) {
+        return new Response(
+          JSON.stringify({ error: 'Missing required fields: context, question' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('Processing Q&A request...');
+
+      let prompt = `You are the VoxTrends Intelligence Agent. Your role is to help users explore news with depth, critical thinking, and intellectual honesty.
+
+News Context:
+${context}
+
+`;
+
+      if (history && history.length > 0) {
+        prompt += 'Previous conversation:\n';
+        for (const msg of history) {
+          const label = msg.role === 'user' ? 'User' : 'Assistant';
+          prompt += `${label}: ${msg.text}\n`;
+        }
+        prompt += '\n';
+      }
+
+      prompt += `User: ${question}
+
+Guidelines:
+- Answer based strictly on the provided news context. If the context doesn't cover something, say so explicitly rather than speculating.
+- Highlight what is NOT being reported or what perspectives are missing — this builds critical thinking.
+- Be direct and specific. Avoid vague generalities.
+- At the end of your answer, suggest 1-2 follow-up questions that would deepen understanding. Format them clearly as: "You might also explore: ..."
+- Language: ${qLanguage || 'English'}`;
+
+      try {
+        const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY') ?? '' });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+        });
+
+        const answer = response.text || 'Unable to generate an answer.';
+        console.log('Q&A answered successfully');
+
+        return new Response(
+          JSON.stringify({ data: { answer } }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (qaError: any) {
+        console.error('Q&A error:', qaError);
+        return new Response(
+          JSON.stringify({ error: qaError.message || 'Failed to process question' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Get user profile
     const { data: profile, error: profileError } = await supabaseClient

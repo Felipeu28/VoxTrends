@@ -201,7 +201,8 @@ export class BackendService {
    * Ask a question about an edition's content
    */
   async askQuestion(context: string, question: string, history: { role: string; text: string }[], language: string) {
-    const result = await this.callFunction('ask-question', {
+    const result = await this.callFunction('generate-edition', {
+      action: 'ask',
       context,
       question,
       history,

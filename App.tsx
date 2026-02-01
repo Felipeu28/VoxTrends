@@ -357,32 +357,23 @@ const InterrogationHub: React.FC<{
             </div>
           )}
 
-          {/* Empty State */}
-          {history.length === 0 && (
-            <div className="bg-zinc-900/50 rounded-2xl p-6 border border-dashed border-zinc-800">
-              <p className="text-sm text-zinc-400 mb-4">ðŸ’¡ Example questions you can ask:</p>
-              <div className="space-y-2">
-                <button
-                  onClick={() => setQuestion("What are the key implications?")}
-                  className="w-full text-left px-4 py-3 bg-zinc-900 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all border border-zinc-800"
-                >
-                  "What are the key implications?"
-                </button>
-                <button
-                  onClick={() => setQuestion("Who will be affected by this?")}
-                  className="w-full text-left px-4 py-3 bg-zinc-900 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all border border-zinc-800"
-                >
-                  "Who will be affected by this?"
-                </button>
-                <button
-                  onClick={() => setQuestion("What happens next?")}
-                  className="w-full text-left px-4 py-3 bg-zinc-900 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all border border-zinc-800"
-                >
-                  "What happens next?"
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Empty State — show first headline from the news as a contextual prompt */}
+          {history.length === 0 && (() => {
+            const firstHeadline = context.split('\n')
+              .find(line => line.trim().length > 10)
+              ?.replace(/[*#]/g, '')
+              ?.trim()
+              ?.slice(0, 90);
+            return firstHeadline ? (
+              <button
+                onClick={() => setQuestion(`What's really behind: ${firstHeadline}?`)}
+                className="w-full text-left px-4 py-3 bg-zinc-900/60 rounded-xl text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-all border border-zinc-800"
+              >
+                <span className="text-violet-500 text-xs font-bold uppercase tracking-wide block mb-1">Start here</span>
+                {firstHeadline}
+              </button>
+            ) : null;
+          })()}
 
           {/* Input Field */}
           <div className="relative">
