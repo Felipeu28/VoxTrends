@@ -94,104 +94,99 @@ export default function VoiceSelector({
   }
 
   return (
-    <div className="w-full">
-      {/* Beautiful Floating Popover - Readable & Elegant */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-2xl">
-        {/* Header */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-            <span className="text-4xl">🎙️</span>
-            Choose Your Voice
-          </h2>
-          <p className="text-gray-400 text-sm mt-2">Select a voice profile to generate audio</p>
-        </div>
-
-        {error && (
-          <div className="bg-red-950 border border-red-800 text-red-200 px-4 py-3 rounded-lg text-sm mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Voice Profile Cards - Readable & Spacious */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {VOICE_PROFILES.map((profile) => {
-            const isGenerating = generatingVoice === profile.id;
-            const isGenerated = profile.id in generatedAudio;
-
-            return (
-              <div
-                key={profile.id}
-                className="bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 hover:border-purple-500 rounded-xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/30"
-              >
-                {/* Emoji Icon */}
-                <div className="text-5xl mb-3">{profile.emoji}</div>
-
-                {/* Name - Full text, readable */}
-                <h3 className="text-lg font-bold text-white mb-2">
-                  {profile.label}
-                </h3>
-
-                {/* Vibe - Readable size */}
-                <p className="text-sm text-gray-300 mb-4">
-                  {profile.vibe}
-                </p>
-
-                {/* Action Button */}
-                {isGenerated ? (
-                  <button
-                    disabled
-                    className="w-full px-4 py-3 bg-green-900 text-green-200 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition"
-                  >
-                    ✓ Ready
-                  </button>
-                ) : isGenerating ? (
-                  <button
-                    disabled
-                    className="w-full px-4 py-3 bg-purple-900/60 text-purple-200 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition"
-                  >
-                    <span className="inline-block animate-spin text-xl">⏳</span>
-                    Generating...
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleGenerateAudio(profile.id)}
-                    className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-sm transition-colors duration-200 flex items-center justify-center gap-2"
-                  >
-                    🎵 Generate
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Audio Players - Appears when audio is generated */}
-        {Object.keys(generatedAudio).length > 0 && (
-          <div className="border-t border-gray-800 pt-6">
-            <h3 className="text-sm font-semibold text-gray-300 mb-4">Your Audio:</h3>
-            <div className="space-y-3">
-              {VOICE_PROFILES.map((profile) => {
-                if (!generatedAudio[profile.id]) return null;
-
-                return (
-                  <div key={profile.id} className="bg-gray-800 rounded-lg p-3">
-                    <div className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                      <span className="text-2xl">{profile.emoji}</span>
-                      {profile.label}
-                    </div>
-                    <audio
-                      controls
-                      src={generatedAudio[profile.id]}
-                      className="w-full h-8"
-                      autoPlay={Object.keys(generatedAudio).length === 1}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+    <div className="w-full space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-black uppercase tracking-widest text-violet-500">Choose Your Voice</h3>
+        <p className="text-zinc-400 text-sm">Select a voice profile to generate audio with your preferred personality</p>
       </div>
+
+      {error && (
+        <div className="bg-red-950/40 border border-red-800/50 text-red-300 px-4 py-3 rounded-xl text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Voice Profile Cards - Full Width Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {VOICE_PROFILES.map((profile) => {
+          const isGenerating = generatingVoice === profile.id;
+          const isGenerated = profile.id in generatedAudio;
+
+          return (
+            <div
+              key={profile.id}
+              className="group bg-gradient-to-br from-zinc-800/40 to-zinc-900/40 border border-zinc-800 hover:border-violet-600/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-2xl hover:shadow-violet-600/20 hover:bg-gradient-to-br hover:from-zinc-800/60 hover:to-zinc-900/60"
+            >
+              {/* Emoji Icon */}
+              <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
+                {profile.emoji}
+              </div>
+
+              {/* Name */}
+              <h4 className="text-lg font-black text-white mb-2">
+                {profile.label}
+              </h4>
+
+              {/* Vibe */}
+              <p className="text-sm text-zinc-400 mb-5">
+                {profile.vibe}
+              </p>
+
+              {/* Action Button */}
+              {isGenerated ? (
+                <button
+                  disabled
+                  className="w-full px-4 py-3 bg-emerald-600/20 border border-emerald-600/50 text-emerald-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition"
+                >
+                  ✓ Ready
+                </button>
+              ) : isGenerating ? (
+                <button
+                  disabled
+                  className="w-full px-4 py-3 bg-violet-600/30 border border-violet-600/50 text-violet-300 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition"
+                >
+                  <span className="inline-block animate-spin">⏳</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleGenerateAudio(profile.id)}
+                  className="w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-black text-sm transition-all duration-200 flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-violet-600/50"
+                >
+                  🎵 Generate
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Audio Players Section */}
+      {Object.keys(generatedAudio).length > 0 && (
+        <div className="border-t border-zinc-800 pt-6 space-y-4">
+          <h4 className="text-sm font-black uppercase tracking-widest text-zinc-500">Generated Audio</h4>
+          <div className="space-y-3">
+            {VOICE_PROFILES.map((profile) => {
+              if (!generatedAudio[profile.id]) return null;
+
+              return (
+                <div key={profile.id} className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
+                  <div className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                    <span className="text-2xl">{profile.emoji}</span>
+                    {profile.label}
+                  </div>
+                  <audio
+                    controls
+                    src={generatedAudio[profile.id]}
+                    className="w-full h-8"
+                    autoPlay={Object.keys(generatedAudio).length === 1}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
