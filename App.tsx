@@ -1478,6 +1478,7 @@ const App: React.FC = () => {
 
                 {/* Audio Player - Show if audio exists */}
                 {currentDaily && currentDaily.audio && (
+                  <>
                   <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden flex justify-center">
                     <AudioPlayer
                       audioData={currentDaily.audio}
@@ -1493,6 +1494,20 @@ const App: React.FC = () => {
                       onEnded={() => setPlayingClipId(null)}
                     />
                   </section>
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => {
+                        const updatedDaily = { ...currentDaily, audio: null };
+                        const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
+                        setDailyEditions(updatedEditions);
+                        voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+                      }}
+                      className="text-xs text-zinc-600 hover:text-violet-400 transition-colors"
+                    >
+                      Try a different voice →
+                    </button>
+                  </div>
+                  </>
                 )}
 
                 {/* No Current Daily - Show Generate Button */}
@@ -1584,17 +1599,7 @@ const App: React.FC = () => {
                         </details>
                       )}
 
-                      <InterrogationHub
-                        context={currentDaily.text}
-                        language={language}
-                        history={currentDaily.chatHistory || []}
-                        setHistory={async (h) => {
-                          const updatedDaily = { ...currentDaily, chatHistory: h };
-                          const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
-                          setDailyEditions(updatedEditions);
-                          await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
-                        }}
-                      />
+                      {/* InterrogationHub moved to right research panel */}
                     </div>
                   )}
 
@@ -1606,72 +1611,24 @@ const App: React.FC = () => {
                 )}
               </div>
 
-              {/* Research Panel - DISABLED: Requires conduct-research Edge Function deployment */}
-              {false ? (
+              {/* Research Panel - Ask Questions */}
+              {currentDaily && (
               <div id="research-section" className="lg:col-span-4 space-y-8">
-                <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-8 md:p-10">
-                  <h3 className="text-xl font-bold mb-8 flex items-center gap-3">
-                    <div className="w-2 h-2 bg-violet-600 rounded-full animate-ping" />
-                    {t.guidedResearcher}
-                  </h3>
-
-                  {step === 0 && (
-                    <div className="space-y-6 animate-in slide-in-from-right">
-                      <h4 className="text-2xl font-serif font-bold">{t.targetTopic}</h4>
-                      <input
-                        type="text"
-                        placeholder="e.g. AI Trends 2025"
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-6 px-8 text-lg focus:outline-none focus:border-violet-600"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleConductResearch()}
-                      />
-                      <button
-                        onClick={handleConductResearch}
-                        disabled={loading}
-                        className="w-full py-5 bg-white text-black font-black rounded-3xl hover:bg-violet-600 hover:text-white transition-all disabled:opacity-50"
-                      >
-                        RESEARCH
-                      </button>
-                    </div>
-                  )}
-
-                  {step === 1 && (
-                    <div className="py-20 text-center space-y-6">
-                      <div className="w-16 h-16 border-4 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                      <p className="text-violet-500 font-mono text-sm uppercase tracking-widest animate-pulse">
-                        Scanning social vectors...
-                      </p>
-                    </div>
-                  )}
-
-                  {step === 2 && researchResult && (
-                    <div className="space-y-8 animate-in fade-in">
-                      <ResearchDisplay result={researchResult} language={language} />
-
-                      <div className="flex flex-col gap-3">
-                        <button
-                          onClick={() => saveToVault(`Research: ${searchQuery}`, researchResult, 'Research')}
-                          className="w-full py-4 bg-violet-600 text-white font-black rounded-2xl hover:bg-violet-700 transition-all"
-                        >
-                          SAVE DOSSIER
-                        </button>
-                        <button
-                          onClick={() => {
-                            setStep(0);
-                            setResearchResult(null);
-                            setSearchQuery('');
-                          }}
-                          className="w-full py-4 bg-zinc-900 text-zinc-500 font-bold rounded-2xl hover:text-white transition-all"
-                        >
-                          NEW INVESTIGATION
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-8 sticky top-10">
+                  <InterrogationHub
+                    context={currentDaily.text}
+                    language={language}
+                    history={currentDaily.chatHistory || []}
+                    setHistory={async (h) => {
+                      const updatedDaily = { ...currentDaily, chatHistory: h };
+                      const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
+                      setDailyEditions(updatedEditions);
+                      await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+                    }}
+                  />
                 </section>
               </div>
-              ) : null}
+              )}
             </div>
           )}
 

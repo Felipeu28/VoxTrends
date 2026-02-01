@@ -23,7 +23,7 @@ export class BackendService {
     console.log('🔍 [Backend] Calling:', url);
     console.log('🔍 [Backend] Body:', body);
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -31,6 +31,23 @@ export class BackendService {
       },
       body: JSON.stringify(body),
     });
+
+    // Token may have expired since session was loaded — refresh and retry once on 401
+    if (response.status === 401) {
+      console.log('🔍 [Backend] Got 401, refreshing session and retrying...');
+      const { data: { session: refreshed }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshed) {
+        throw new Error('Session expired. Please log in again.');
+      }
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${refreshed.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+    }
 
     console.log('🔍 [Backend] Response status:', response.status);
 

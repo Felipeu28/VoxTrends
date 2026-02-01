@@ -859,17 +859,12 @@ serve(async (req) => {
     // Skip audio generation - users will select voice variant after content is ready
     // This reduces TTS cost by ~90% (only generate audio for variants they actually want)
 
-    console.log('Step 2: Generating flash summary...');
-    let flashSummary = '';
-    try {
-      flashSummary = await gemini.generateFlashSummary(trendingNews, language);
-    } catch (e) { console.error('Summary error:', e); }
-
-    console.log('Step 3: Generating cover art...');
-    let imageUrl = null;
-    try {
-      imageUrl = await withTimeout(gemini.generateCoverArt(firstTopic), 30000, null);
-    } catch (e) { console.error('Image error:', e); }
+    // Steps 2 & 3 are independent of each other — run in parallel to cut wall-clock time
+    console.log('Steps 2+3: Generating flash summary and cover art in parallel...');
+    const [flashSummary, imageUrl] = await Promise.all([
+      gemini.generateFlashSummary(trendingNews, language).catch((e: any) => { console.error('Summary error:', e); return ''; }),
+      withTimeout(gemini.generateCoverArt(firstTopic), 30000, null).catch((e: any) => { console.error('Image error:', e); return null; }),
+    ]);
 
     console.log('Step 4: Generating podcast script (90s)...');
     let script = '';
