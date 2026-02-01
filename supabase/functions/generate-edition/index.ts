@@ -189,15 +189,25 @@ class GeminiService {
         ? `\n        DEDUPLICATION: Earlier editions today already covered these topics: ${previousTopics}. Do NOT repeat any of these as a main topic. Pick fresh, distinct stories that complement what was already covered.\n`
         : '';
 
+      // When language is not English, open with a native-language directive so
+      // the model's internal search queries fire in the target language from the
+      // very first token — an English-only prompt causes googleSearch to default
+      // to English regardless of later instructions.
+      const languagePreamble = language !== 'English'
+        ? (language === 'Spanish'
+            ? `Busca noticias en español de ${region}. Todas las búsquedas, títulos y texto deben estar en español.\n\n`
+            : `Search for news in ${language} from ${region}.\n\n`)
+        : '';
+
       console.log(`Generating detailed ${editionType} news briefing for ${region} in ${language}...`);
       console.log(previousTopics ? `Dedup active — excluding ${previousTopics.split(',').length} previous topics` : 'No previous topics to deduplicate');
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
-            text: `[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
+            text: `${languagePreamble}[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
-        LANGUAGE: All output MUST be written entirely in ${language}. Search for news sources in ${language} from ${region}. Headlines, analysis, and every sentence must be in ${language}. Do NOT mix languages or output anything in English if ${language} is not English.
+        LANGUAGE: All output MUST be written entirely in ${language}. Every search query you generate MUST be in ${language}. Search for news sources in ${language} from ${region}. Headlines, analysis, and every sentence must be in ${language}. Do NOT mix languages or output anything in English if ${language} is not English.
 
         You are an expert news analyst and investigative journalist.
         Research the top 5 most significant news topics and trending stories from ${timeFocus} in ${region}.
