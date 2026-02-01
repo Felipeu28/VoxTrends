@@ -384,24 +384,6 @@ const InterrogationHub: React.FC<{
             </div>
           )}
 
-          {/* Empty State — show first headline from the news as a contextual prompt */}
-          {history.length === 0 && (() => {
-            const firstHeadline = context.split('\n')
-              .find(line => line.trim().length > 10)
-              ?.replace(/[*#]/g, '')
-              ?.trim()
-              ?.slice(0, 90);
-            return firstHeadline ? (
-              <button
-                onClick={() => setQuestion(`What's really behind: ${firstHeadline}?`)}
-                className="w-full text-left px-4 py-3 bg-zinc-900/60 rounded-xl text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-all border border-zinc-800"
-              >
-                <span className="text-violet-500 text-xs font-bold uppercase tracking-wide block mb-1">Start here</span>
-                {firstHeadline}
-              </button>
-            ) : null;
-          })()}
-
           {/* Input Field */}
           <div className="relative">
             <input

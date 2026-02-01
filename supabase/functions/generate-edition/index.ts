@@ -197,9 +197,11 @@ class GeminiService {
           role: 'user', parts: [{
             text: `[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
+        LANGUAGE: All output MUST be written entirely in ${language}. Search for news sources in ${language} from ${region}. Headlines, analysis, and every sentence must be in ${language}. Do NOT mix languages or output anything in English if ${language} is not English.
+
         You are an expert news analyst and investigative journalist.
         Research the top 5 most significant news topics and trending stories from ${timeFocus} in ${region}.
-        Include stories that are trending on social media platforms including X (Twitter), Reddit, and other public forums.
+        Include stories that are trending on social media platforms including X (Twitter), Reddit, and other public forums relevant to ${region}.
         ${thematicFocus}
         ${dedupInstruction}
         For EACH of the top 5 topics, you MUST provide a comprehensive and detailed report.
@@ -212,10 +214,9 @@ class GeminiService {
         - DO NOT include ANY introductory text, acknowledging filler, or meta-talk (e.g., "Okay, I will investigate...", "Based on my research...", "Here are the top stories...").
         - START DIRECTLY with the first news report.
 
-        Format the output as a high-quality journalistic deep-dive in ${language}.
         You MAY use simple markdown like headers (#) and bolding (**) for readability.
         DO NOT use emojis.
-        Be extremely informative. Focus on qualitative density. We need high-quality content for a 2-minute podcast.` }]
+        Be extremely informative. Focus on qualitative density. We need high-quality content for a podcast.` }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
@@ -262,8 +263,8 @@ class GeminiService {
 
         LENGTH — STRICT:
         - This is a ${duration} briefing at a natural conversational pace (~150 words/minute).
-        - Total script must be 280-320 words. Do NOT exceed 320 words.
-        - Cover the 2-3 most important stories only. Depth over breadth — don't rush through everything.
+        - Total script must be 350-385 words. Do NOT exceed 385 words.
+        - Cover the 3 most important stories. Depth over breadth — don't rush through everything.
 
         FORMAT RULES:
         - EVERY single line of dialogue MUST start with either "${hostLead}:" or "${hostExpert}:" followed by a space. No exceptions.
@@ -657,18 +658,36 @@ ${context}
 
       prompt += `User: ${question}
 
-Guidelines:
-- Answer based strictly on the provided news context. If the context doesn't cover something, say so explicitly rather than speculating.
-- Highlight what is NOT being reported or what perspectives are missing — this builds critical thinking.
-- Be direct and specific. Avoid vague generalities.
-- At the end of your answer, suggest 1-2 follow-up questions that would deepen understanding. Format them clearly as: "You might also explore: ..."
-- Language: ${qLanguage || 'English'}`;
+You have access to web search. Use it to find information that goes BEYOND what the news context above provides. The context gives you the baseline — search to fill the gaps, verify claims, and find what the reporting left out.
+
+RESPONSE FORMAT — follow this structure exactly:
+
+**What the sources say:**
+Summarize what is reported on this topic — from both the news context AND what you found via search. Be precise: cite specific claims, names, numbers, and dates. If the original context and fresh sources contradict each other, flag it.
+
+**What's missing or left unsaid:**
+This is the core. What is the reporting NOT covering? Whose voices are absent? What questions is no one asking? What context — found via your search — would change how people understand this? What incentives or power dynamics are invisible? Be specific and direct.
+
+**Why it matters:**
+Connect this to broader patterns. What does this reveal about how this issue actually works — politically, economically, socially? Ground it in what you found, not speculation.
+
+**You might also explore:**
+End with exactly 2 follow-up questions that would push the investigation deeper. Make them specific, not generic.
+
+GUIDELINES:
+- Language: ${qLanguage || 'English'}. Write entirely in this language.
+- Be direct. No hedging, no filler, no preamble.
+- Search actively. Do not stay inside the box of what the edition text already says — that's what people already read. They came here to go deeper.
+- The "What's missing" section is the most important. This is where people come to find the truth.`;
 
       try {
         const ai = new GoogleGenAI({ apiKey: Deno.env.get('GEMINI_API_KEY') ?? '' });
         const response = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
           contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
         });
 
         const answer = response.text || 'Unable to generate an answer.';
@@ -707,10 +726,10 @@ Guidelines:
         );
       }
 
-      // Fetch edition and verify ownership
+      // Fetch edition
       const { data: edition, error: editionError } = await supabaseClient
         .from('daily_editions')
-        .select('id, script, user_id')
+        .select('id, script')
         .eq('id', edition_id)
         .single();
 
@@ -718,13 +737,6 @@ Guidelines:
         return new Response(
           JSON.stringify({ error: 'Edition not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      if (edition.user_id !== user.id) {
-        return new Response(
-          JSON.stringify({ error: 'Access denied: You do not own this edition' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -1054,7 +1066,7 @@ Guidelines:
       script = await gemini.generatePodcastScript(
         trendingNews,
         language,
-        '2:00',
+        '2:30',
         voiceProfile.hosts.lead,
         voiceProfile.hosts.expert
       );
