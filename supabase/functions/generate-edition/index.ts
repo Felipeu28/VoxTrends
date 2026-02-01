@@ -575,15 +575,16 @@ serve(async (req) => {
 
     const { editionType, region, language, forceRefresh, voiceId = 'originals', generateAudio = false } = body;
     const isAskAction = body.action === 'ask';
+    const isVoiceVariantAction = body.action === 'generate-voice-variant';
 
-    console.log(isAskAction ? 'Q&A request received' : 'Edition request:', { editionType, region, language, forceRefresh, voiceId });
+    console.log(isAskAction ? 'Q&A request received' : isVoiceVariantAction ? 'Voice variant request received' : 'Edition request:', { editionType, region, language, forceRefresh, voiceId });
 
     // Select voice profile
     const profileKey = (VOICE_PROFILES[voiceId as VoiceId] ? voiceId : 'originals') as VoiceId;
     const voiceProfile = VOICE_PROFILES[profileKey];
 
-    // Validate edition inputs (skip for Q&A action)
-    if (!isAskAction && (!editionType || !region || !language)) {
+    // Validate edition inputs (skip for routed actions)
+    if (!isAskAction && !isVoiceVariantAction && (!editionType || !region || !language)) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: editionType, region, language' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -684,6 +685,119 @@ Guidelines:
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+    }
+
+    // ==================== VOICE VARIANT ACTION ====================
+    // generate-voice-variant is routed here because it was never deployed as a standalone function.
+    // This early-returns before any edition logic runs.
+    if (isVoiceVariantAction) {
+      const { edition_id, voice_id } = body;
+
+      if (!edition_id || !voice_id) {
+        return new Response(
+          JSON.stringify({ error: 'Missing required fields: edition_id, voice_id' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!VOICE_PROFILES[voice_id as VoiceId]) {
+        return new Response(
+          JSON.stringify({ error: `Invalid voice_id. Must be one of: ${Object.keys(VOICE_PROFILES).join(', ')}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fetch edition and verify ownership
+      const { data: edition, error: editionError } = await supabaseClient
+        .from('daily_editions')
+        .select('id, script, user_id')
+        .eq('id', edition_id)
+        .single();
+
+      if (editionError || !edition) {
+        return new Response(
+          JSON.stringify({ error: 'Edition not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (edition.user_id !== user.id) {
+        return new Response(
+          JSON.stringify({ error: 'Access denied: You do not own this edition' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!edition.script) {
+        return new Response(
+          JSON.stringify({ error: 'Edition script not available' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check if variant already cached
+      const { data: existingVariant } = await supabaseClient
+        .from('voice_variants')
+        .select('id, audio_url')
+        .eq('edition_id', edition_id)
+        .eq('voice_id', voice_id)
+        .single();
+
+      if (existingVariant) {
+        console.log(`✅ Returning cached voice variant: ${voice_id}`);
+        return new Response(
+          JSON.stringify({ data: { variant_id: existingVariant.id, audio: existingVariant.audio_url, cached: true } }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Generate new variant
+      console.log(`🎙️ Generating new voice variant: ${voice_id}`);
+      const variantProfile = VOICE_PROFILES[voice_id as VoiceId];
+      const gemini = new GeminiService(Deno.env.get('GEMINI_API_KEY') ?? '');
+      const scriptForTTS = remapScriptSpeakers(edition.script, variantProfile.hosts);
+
+      const audioResult = await gemini.generateAudio(
+        scriptForTTS,
+        variantProfile.voices.lead,
+        variantProfile.voices.expert,
+        variantProfile.hosts.lead,
+        variantProfile.hosts.expert
+      );
+
+      if (!audioResult.data) {
+        return new Response(
+          JSON.stringify({ error: `Audio generation failed: ${audioResult.error}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const audioUrl = `data:audio/wav;base64,${audioResult.data}`;
+
+      // Store variant
+      const { data: variant, error: variantError } = await supabaseClient
+        .from('voice_variants')
+        .insert({
+          edition_id,
+          user_id: user.id,
+          voice_id,
+          audio_url: audioUrl,
+          generation_time_ms: Date.now(),
+          cost_estimate: 0.05,
+        })
+        .select()
+        .single();
+
+      if (variantError) {
+        console.warn(`⚠️ Failed to store variant: ${variantError.message}`);
+      }
+
+      console.log(`✅ Voice variant generated: ${voice_id}`);
+
+      return new Response(
+        JSON.stringify({ data: { variant_id: variant?.id, audio: audioUrl, cached: false } }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Get user profile

@@ -141,7 +141,8 @@ export class BackendService {
    * Generate audio for a voice variant (Phase 3)
    */
   async generateVoiceVariant(editionId: string, voiceId: string) {
-    return this.callFunction('generate-voice-variant', {
+    return this.callFunction('generate-edition', {
+      action: 'generate-voice-variant',
       edition_id: editionId,
       voice_id: voiceId,
     });
