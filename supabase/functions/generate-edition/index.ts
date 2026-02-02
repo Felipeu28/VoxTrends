@@ -189,6 +189,15 @@ class GeminiService {
         ? `\n        DEDUPLICATION: Earlier editions today already covered these topics: ${previousTopics}. Do NOT repeat any of these as a main topic. Pick fresh, distinct stories that complement what was already covered.\n`
         : '';
 
+      // Get today's date explicitly for the prompt
+      const today = new Date();
+      const dateString = today.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
       console.log(`Generating detailed ${editionType} news briefing for ${region} in ${language}...`);
       console.log(previousTopics ? `Dedup active — excluding ${previousTopics.split(',').length} previous topics` : 'No previous topics to deduplicate');
       const response = await this.ai.models.generateContent({
@@ -198,7 +207,8 @@ class GeminiService {
             text: `[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
         You are an expert news analyst and investigative journalist.
-        Research the top 5 most significant news topics and trending stories from ${timeFocus} in ${region}.
+        TODAY'S DATE: ${dateString}
+        Research the top 5 most significant news topics and trending stories from ${timeFocus} (specifically ${dateString}) in ${region}.
         Include stories that are trending on social media platforms including X (Twitter), Reddit, and other public forums.
         ${thematicFocus}
         ${dedupInstruction}
@@ -294,15 +304,26 @@ class GeminiService {
     }
   }
 
-  async generateAudio(script: string, voiceLead: string = 'Puck', voiceExpert: string = 'Kore', hostLead: string = 'Joe', hostExpert: string = 'Jane'): Promise<{ data: string | null; error?: string }> {
+  async generateAudio(script: string, voiceLead: string = 'Puck', voiceExpert: string = 'Kore', hostLead: string = 'Joe', hostExpert: string = 'Jane', language: string = 'English'): Promise<{ data: string | null; error?: string }> {
     try {
-      console.log(`Starting TTS generation with voices ${voiceLead} and ${voiceExpert}...`);
+      // Map language names to BCP-47 locale codes for Gemini TTS
+      const languageCodeMap: Record<string, string> = {
+        'English': 'en-US',
+        'Spanish': 'es-ES',
+        'Portuguese': 'pt-BR',
+        'French': 'fr-FR',
+        'German': 'de-DE',
+      };
+      const languageCode = languageCodeMap[language] || 'en-US';
+
+      console.log(`Starting TTS generation with voices ${voiceLead} and ${voiceExpert} in ${language} (${languageCode})...`);
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash-preview-tts',
         contents: [{ parts: [{ text: script }] }],
         config: {
           responseModalities: ['AUDIO'],
           speechConfig: {
+            languageCode: languageCode,
             multiSpeakerVoiceConfig: {
               speakerVoiceConfigs: [
                 { speaker: hostLead, voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceLead } } },
@@ -710,7 +731,7 @@ Guidelines:
       // Fetch edition and verify ownership
       const { data: edition, error: editionError } = await supabaseClient
         .from('daily_editions')
-        .select('id, script, user_id')
+        .select('id, script, user_id, language')
         .eq('id', edition_id)
         .single();
 
@@ -762,7 +783,8 @@ Guidelines:
         variantProfile.voices.lead,
         variantProfile.voices.expert,
         variantProfile.hosts.lead,
-        variantProfile.hosts.expert
+        variantProfile.hosts.expert,
+        edition.language || 'English'
       );
 
       if (!audioResult.data) {
@@ -935,7 +957,8 @@ Guidelines:
               voiceProfile.voices.lead,
               voiceProfile.voices.expert,
               voiceProfile.hosts.lead,
-              voiceProfile.hosts.expert
+              voiceProfile.hosts.expert,
+              cachedEdition.language || language || 'English'
             );
 
             if (audioResult.data) {
@@ -1184,7 +1207,8 @@ Guidelines:
           voiceProfile.voices.lead,
           voiceProfile.voices.expert,
           voiceProfile.hosts.lead,
-          voiceProfile.hosts.expert
+          voiceProfile.hosts.expert,
+          language || 'English'
         );
 
         if (audioResult.data) {
