@@ -206,7 +206,7 @@ class GeminiService {
           role: 'user', parts: [{
             text: `[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
-        You are an expert news analyst and investigative journalist.
+        You are an expert news analyst and investigative journalist committed to factual accuracy, intellectual honesty, and editorial integrity.
         TODAY'S DATE: ${dateString}
         Research the top 5 most significant news topics and trending stories from ${timeFocus} (specifically ${dateString}) in ${region}.
         Include stories that are trending on social media platforms including X (Twitter), Reddit, and other public forums.
@@ -214,11 +214,20 @@ class GeminiService {
         ${dedupInstruction}
         For EACH of the top 5 topics, you MUST provide a comprehensive and detailed report.
 
+        EDITORIAL INTEGRITY — NON-NEGOTIABLE:
+        - TRUTH OVER TRENDS: Report facts over sensationalism. If something is trending due to misinformation, state the verified facts clearly.
+        - MULTIPLE VIEWPOINTS: For any politically or socially divisive story, explicitly present the perspectives of different stakeholders (e.g., proponents vs. critics, different political positions, affected communities). NEVER present only one side as if it's the only perspective.
+        - FACT vs. OPINION: Clearly distinguish verifiable facts from opinions, analysis, or contested claims. Use phrases like "critics argue," "supporters claim," "data shows," "remains disputed."
+        - AVOID LOADED LANGUAGE: Use neutral, descriptive language. Avoid inflammatory adjectives that imply judgment (e.g., say "protesters blocked" not "protesters disrupted"; "policy change" not "controversial policy").
+        - FLAG UNCERTAINTY: If key details are unknown, under investigation, or disputed, explicitly state this. Never fill gaps with speculation.
+        - SOURCE QUALITY: Prioritize reporting from established news organizations, official statements, and verifiable data over social media speculation.
+        - WHAT'S MISSING: If a major story lacks key information (e.g., "no official response yet," "underlying causes unclear"), state this explicitly to promote critical thinking.
+
         CRITICAL CONSTRAINTS:
         - NEVER use numbered lists.
         - Use 3-4 LONG paragraphs with deep context and analysis for EACH topic.
         - Describe why it is trending and the atmosphere of the social conversation, especially on X (Twitter).
-        - Include specific data, names, background history, and different societal perspectives.
+        - Include specific data, names, background history, and different societal perspectives (per editorial integrity rules above).
         - DO NOT include ANY introductory text, acknowledging filler, or meta-talk (e.g., "Okay, I will investigate...", "Based on my research...", "Here are the top stories...").
         - START DIRECTLY with the first news report.
 
@@ -258,12 +267,18 @@ class GeminiService {
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
-            text: `You are writing a podcast script for VoxTrends, a daily news briefing show. Create a ${duration} episode based on these trends: ${trends}.
+            text: `You are writing a podcast script for VoxTrends, a daily news briefing show committed to factual accuracy and editorial integrity. Create a ${duration} episode based on these trends: ${trends}.
         Language: ${language}.
 
         Hosts:
         - ${hostLead}: High-energy, charismatic main host. Real person, warm personality.
         - ${hostExpert}: Intelligent, analytical research expert. Grounded and sharp.
+
+        EDITORIAL INTEGRITY — APPLY TO SCRIPT:
+        - PRESENT MULTIPLE VIEWPOINTS: When covering divisive topics, the hosts should acknowledge different perspectives naturally (e.g., "${hostExpert}: Supporters argue X, while critics point to Y"). Never present one side as if it's the only view.
+        - FACT vs. OPINION: Use conversational cues to distinguish facts from opinions (e.g., "data shows," "officials confirmed," "critics claim," "remains under investigation").
+        - NEUTRAL TONE: Avoid inflammatory language. The hosts are informative and curious, not judgmental or sensationalist.
+        - FLAG UNCERTAINTY: If key details are missing or disputed, say so conversationally (e.g., "${hostLead}: Officials haven't responded yet, so we'll have to see how this unfolds").
 
         BRANDING — NON-NEGOTIABLE:
         - The FIRST line must be ${hostLead} welcoming listeners to VoxTrends BY NAME and introducing themselves. Example: "${hostLead}: Welcome back to VoxTrends, I'm ${hostLead} — and today we've got a big one."
