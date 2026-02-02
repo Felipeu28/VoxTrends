@@ -236,41 +236,43 @@ class GeminiService {
 
       console.log(`Generating detailed ${editionType} news briefing for ${region} in ${language}...`);
       console.log('🔍 DEBUG - News fetch language parameter:', language);
-      console.log('🔍 DEBUG - Language preamble:', languagePreamble.substring(0, 100));
       console.log(previousTopics ? `Dedup active — excluding ${previousTopics.split(',').length} previous topics` : 'No previous topics to deduplicate');
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{
-          role: 'user', parts: [{
-            text: `${languagePreamble}[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
-        ═══════════════════════════════════════════════════
-        ⚠️ CRITICAL LANGUAGE REQUIREMENT - NON-NEGOTIABLE ⚠️
-        ═══════════════════════════════════════════════════
+      // Generate ENTIRE prompt in target language
+      const prompt = language === 'Spanish'
+        ? `Busca noticias exclusivamente en español de ${region}. TODAS las búsquedas, títulos, análisis y todo el texto deben estar completamente en español.
 
-        OUTPUT LANGUAGE: ${language}
+        [INSTRUCCIÓN ESTRICTA: NO INCLUIR NINGÚN TEXTO INTRODUCTORIO O DE RELLENO. COMENZAR INMEDIATAMENTE CON EL PRIMER TEMA.]
 
-        ${language === 'Spanish' ? `
-        DEBES escribir TODO en ESPAÑOL. Esto incluye:
-        - Todas las búsquedas de noticias → en español
-        - Todos los títulos y encabezados → en español
-        - Todo el análisis y contexto → en español
-        - Cada palabra y oración → en español
+        Eres un analista de noticias experto y periodista de investigación comprometido con la precisión factual, la honestidad intelectual y la integridad editorial.
+        FECHA DE HOY: ${dateString}
+        Investiga los 5 temas de noticias más significativos y las historias de tendencia de ${timeFocus} (específicamente ${dateString}) en ${region}.
+        Incluye historias que sean tendencia en plataformas de redes sociales incluyendo X (Twitter), Reddit y otros foros públicos relevantes para ${region}.
+        ${thematicFocus}
+        ${dedupInstruction}
+        Para CADA uno de los 5 temas, DEBES proporcionar un informe completo y detallado.
 
-        Si usas inglés en CUALQUIER parte, habrás FALLADO completamente.
-        No hay excepciones. TODO debe estar en español.
-        ` : `
-        You MUST write EVERYTHING in ${language}. This includes:
-        - All news searches → in ${language}
-        - All headlines and titles → in ${language}
-        - All analysis and context → in ${language}
-        - Every single word and sentence → in ${language}
+        INTEGRIDAD EDITORIAL — NO NEGOCIABLE:
+        - VERDAD SOBRE TENDENCIAS: Reportar hechos sobre sensacionalismo. Si algo es tendencia debido a desinformación, exponer los hechos verificados claramente.
+        - MÚLTIPLES PUNTOS DE VISTA: Para cualquier historia políticamente o socialmente divisiva, presentar explícitamente las perspectivas de diferentes partes interesadas (ej., proponentes vs. críticos, diferentes posiciones políticas, comunidades afectadas). NUNCA presentar solo un lado como si fuera la única perspectiva.
+        - HECHO vs. OPINIÓN: Distinguir claramente los hechos verificables de las opiniones, análisis o afirmaciones disputadas. Usar frases como "los críticos argumentan," "los partidarios afirman," "los datos muestran," "permanece en disputa."
+        - EVITAR LENGUAJE CARGADO: Usar lenguaje neutral y descriptivo. Evitar adjetivos inflamatorios que impliquen juicio.
+        - SEÑALAR INCERTIDUMBRE: Si los detalles clave son desconocidos, están bajo investigación o en disputa, exponerlo explícitamente. Nunca llenar vacíos con especulación.
+        - CALIDAD DE FUENTES: Priorizar reportes de organizaciones de noticias establecidas, declaraciones oficiales y datos verificables sobre especulación de redes sociales.
+        - LO QUE FALTA: Si una historia importante carece de información clave, exponerlo explícitamente para promover el pensamiento crítico.
 
-        If you use English in ANY part, you have FAILED completely.
-        There are no exceptions. EVERYTHING must be in ${language}.
-        `}
+        RESTRICCIONES CRÍTICAS:
+        - NUNCA usar listas numeradas.
+        - Usar 3-4 párrafos LARGOS con contexto profundo y análisis para CADA tema.
+        - Describir por qué es tendencia y la atmósfera de la conversación social, especialmente en X (Twitter).
+        - Incluir datos específicos, nombres, historia de fondo y diferentes perspectivas sociales (según las reglas de integridad editorial anteriores).
+        - NO incluir NINGÚN texto introductorio, relleno de reconocimiento o meta-charla (ej., "Okay, voy a investigar...", "Basado en mi investigación...", "Aquí están las principales historias...").
+        - COMENZAR DIRECTAMENTE con el primer informe de noticias.
 
-        ═══════════════════════════════════════════════════
+        PUEDES usar markdown simple como encabezados (#) y negrita (**) para legibilidad.
+        NO usar emojis.
+        Ser extremadamente informativo. Enfocarse en densidad cualitativa. Necesitamos contenido de alta calidad para un podcast.`
+        : `${languagePreamble}[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
         You are an expert news analyst and investigative journalist committed to factual accuracy, intellectual honesty, and editorial integrity.
         TODAY'S DATE: ${dateString}
@@ -299,7 +301,14 @@ class GeminiService {
 
         You MAY use simple markdown like headers (#) and bolding (**) for readability.
         DO NOT use emojis.
-        Be extremely informative. Focus on qualitative density. We need high-quality content for a podcast.` }]
+        Be extremely informative. Focus on qualitative density. We need high-quality content for a podcast.`;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{
+          role: 'user', parts: [{
+            text: prompt
+          }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
@@ -341,33 +350,47 @@ class GeminiService {
       console.log('🔍 DEBUG - Script generation language parameter:', language);
       console.log('🔍 DEBUG - First 200 chars of news input to script:', trends.substring(0, 200));
 
-      const languageInstruction = language === 'Spanish'
-        ? `IDIOMA OBLIGATORIO: ESPAÑOL
+      // Generate ENTIRE prompt in target language
+      const prompt = language === 'Spanish'
+        ? `Estás escribiendo un guion de podcast para VoxTrends, un programa diario de noticias comprometido con la precisión factual y la integridad editorial. Crea un episodio de ${duration} basado en estas tendencias: ${trends}.
 
-⚠️ CRÍTICO: El guion COMPLETO debe estar en ESPAÑOL.
-- Cada línea de diálogo → en español
-- Todas las palabras del guion → en español
-- La introducción y despedida → en español
-- TODO EL CONTENIDO → en español
+        Presentadores:
+        - ${hostLead}: Presentador principal enérgico y carismático. Persona real, personalidad cálida.
+        - ${hostExpert}: Experto investigador inteligente y analítico. Fundamentado y agudo.
 
-NO uses inglés en NINGUNA parte. Si escribes aunque sea UNA palabra en inglés, habrás fallado.`
-        : `MANDATORY LANGUAGE: ${language}
+        INTEGRIDAD EDITORIAL — APLICAR AL GUION:
+        - PRESENTAR MÚLTIPLES PUNTOS DE VISTA: Al cubrir temas divisivos, los presentadores deben reconocer diferentes perspectivas naturalmente (ej., "${hostExpert}: Los partidarios argumentan X, mientras que los críticos señalan Y"). Nunca presentar un solo lado como si fuera la única visión.
+        - HECHO vs. OPINIÓN: Usar señales conversacionales para distinguir hechos de opiniones (ej., "los datos muestran," "los oficiales confirmaron," "los críticos afirman," "permanece bajo investigación").
+        - TONO NEUTRAL: Evitar lenguaje inflamatorio. Los presentadores son informativos y curiosos, no sentenciosos ni sensacionalistas.
+        - SEÑALAR INCERTIDUMBRE: Si faltan detalles clave o están en disputa, decirlo conversacionalmente (ej., "${hostLead}: Los oficiales aún no han respondido, así que tendremos que ver cómo se desarrolla esto").
 
-⚠️ CRITICAL: The ENTIRE script must be in ${language}.
-- Every line of dialogue → in ${language}
-- All words in the script → in ${language}
-- The introduction and sign-off → in ${language}
-- ALL CONTENT → in ${language}
+        MARCA — NO NEGOCIABLE:
+        - La PRIMERA línea debe ser ${hostLead} dando la bienvenida a los oyentes a VoxTrends POR NOMBRE y presentándose. Ejemplo: "${hostLead}: Bienvenidos de nuevo a VoxTrends, soy ${hostLead} — y hoy tenemos algo grande."
+        - La ÚLTIMA línea debe ser ${hostLead} despidiéndose con VoxTrends. Ejemplo: "${hostLead}: Ese es tu resumen de VoxTrends para hoy. Mantente curioso, mantente agudo — soy ${hostLead}, nos vemos la próxima vez."
+        - Estos son presentadores reales con nombres. Deben sentirse como personas reales, no un resumen genérico de IA.
 
-Do NOT use English at all. If you write even ONE word in English, you have failed.`;
+        LONGITUD — ESTRICTA:
+        - Este es un resumen de ${duration} a un ritmo conversacional natural (~150 palabras/minuto).
+        - El guion total debe tener 350-385 palabras. NO exceder 385 palabras.
+        - Cubrir las 3 historias más importantes. Profundidad sobre amplitud — no apresurarse.
 
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{
-          role: 'user', parts: [{
-            text: `${languageInstruction}
+        REGLAS DE FORMATO:
+        - CADA línea de diálogo DEBE comenzar con "${hostLead}:" o "${hostExpert}:" seguido de un espacio. Sin excepciones.
+        - Cambiar de hablante cada 2-3 oraciones. Sin bloques largos de monólogo.
+        - Ambos presentadores hablan aproximadamente igual. Escribir como una conversación natural de ida y vuelta.
 
-You are writing a podcast script for VoxTrends, a daily news briefing show committed to factual accuracy and editorial integrity. Create a ${duration} episode based on these trends: ${trends}.
+        Estructura:
+        ${hostLead}: [Bienvenida a VoxTrends + gancho — el detalle más sorprendente]
+        ${hostExpert}: [Reaccionar, añadir contexto — máximo 2 oraciones]
+        ${hostLead}: [Pregunta de seguimiento o transición]
+        ${hostExpert}: [Primera historia — 2-3 oraciones con detalles específicos]
+        ${hostLead}: [Comentario o puente a la siguiente historia]
+        ${hostExpert}: [Segunda historia — 2-3 oraciones]
+        ... [continuar alternando, máximo 2-3 historias]
+        ${hostLead}: [Despedida de VoxTrends]
+
+        Genera solo el texto del guion. No uses emojis.`
+        : `You are writing a podcast script for VoxTrends, a daily news briefing show committed to factual accuracy and editorial integrity. Create a ${duration} episode based on these trends: ${trends}.
 
         Hosts:
         - ${hostLead}: High-energy, charismatic main host. Real person, warm personality.
@@ -404,7 +427,14 @@ You are writing a podcast script for VoxTrends, a daily news briefing show commi
         ... [continue alternating, 2-3 stories max]
         ${hostLead}: [VoxTrends sign-off]
 
-        Output only the script text. Do not use emojis.` }]
+        Output only the script text. Do not use emojis.`;
+
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{
+          role: 'user', parts: [{
+            text: prompt
+          }]
         }],
         config: {
           generationConfig: { temperature: 0.8 },
