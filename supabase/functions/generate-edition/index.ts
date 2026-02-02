@@ -104,6 +104,32 @@ function remapScriptSpeakers(script: string, targetHosts: { lead: string; expert
   return remapped;
 }
 
+// ==================== LANGUAGE VALIDATION ====================
+function validateLanguage(text: string, expectedLanguage: string): { isValid: boolean; detectedLanguage: string } {
+  // Simple heuristic: Check for common words in each language
+  const spanishIndicators = ['el', 'la', 'los', 'las', 'de', 'en', 'que', 'y', 'se', 'por', 'para', 'con', 'está', 'son', 'una', 'este', 'como', 'del'];
+  const englishIndicators = ['the', 'of', 'and', 'to', 'in', 'is', 'for', 'with', 'on', 'that', 'this', 'are', 'was', 'were', 'from', 'have', 'has'];
+
+  const lowerText = text.toLowerCase().substring(0, 500); // Check first 500 chars
+  const words = lowerText.split(/\s+/);
+
+  const spanishCount = words.filter(w => spanishIndicators.includes(w)).length;
+  const englishCount = words.filter(w => englishIndicators.includes(w)).length;
+
+  let detectedLanguage = 'Unknown';
+  if (spanishCount > englishCount && spanishCount > 3) {
+    detectedLanguage = 'Spanish';
+  } else if (englishCount > spanishCount && englishCount > 3) {
+    detectedLanguage = 'English';
+  }
+
+  const isValid = expectedLanguage === 'English'
+    ? detectedLanguage === 'English' || detectedLanguage === 'Unknown'
+    : detectedLanguage === expectedLanguage;
+
+  return { isValid, detectedLanguage };
+}
+
 // ==================== GEMINI SERVICE ====================
 
 // Helper: Create WAV header for PCM audio (24kHz, 16-bit, mono)
@@ -195,8 +221,8 @@ class GeminiService {
       // to English regardless of later instructions.
       const languagePreamble = language !== 'English'
         ? (language === 'Spanish'
-            ? `Busca noticias en español de ${region}. Todas las búsquedas, títulos y texto deben estar en español.\n\n`
-            : `Search for news in ${language} from ${region}.\n\n`)
+            ? `INSTRUCCIÓN OBLIGATORIA: Busca noticias exclusivamente en español de ${region}. TODAS las búsquedas, títulos, análisis y todo el texto deben estar completamente en español. NO uses inglés en ninguna parte.\n\nDEBES escribir TODO en español - desde la primera palabra hasta la última. Si escribes aunque sea una palabra en inglés, habrás fallado.\n\n`
+            : `MANDATORY: Search for news exclusively in ${language} from ${region}. ALL searches, titles, analysis, and ALL text must be completely in ${language}. Do NOT use English at all.\n\n`)
         : '';
 
       // Get today's date explicitly for the prompt
@@ -209,6 +235,8 @@ class GeminiService {
       });
 
       console.log(`Generating detailed ${editionType} news briefing for ${region} in ${language}...`);
+      console.log('🔍 DEBUG - News fetch language parameter:', language);
+      console.log('🔍 DEBUG - Language preamble:', languagePreamble.substring(0, 100));
       console.log(previousTopics ? `Dedup active — excluding ${previousTopics.split(',').length} previous topics` : 'No previous topics to deduplicate');
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.0-flash',
@@ -216,7 +244,33 @@ class GeminiService {
           role: 'user', parts: [{
             text: `${languagePreamble}[STRICT INSTRUCTION: DO NOT INCLUDE ANY INTRODUCTORY TEXT OR FILLER. START IMMEDIATELY WITH THE FIRST TOPIC.]
 
-        LANGUAGE: All output MUST be written entirely in ${language}. Every search query you generate MUST be in ${language}. Search for news sources in ${language} from ${region}. Headlines, analysis, and every sentence must be in ${language}. Do NOT mix languages or output anything in English if ${language} is not English.
+        ═══════════════════════════════════════════════════
+        ⚠️ CRITICAL LANGUAGE REQUIREMENT - NON-NEGOTIABLE ⚠️
+        ═══════════════════════════════════════════════════
+
+        OUTPUT LANGUAGE: ${language}
+
+        ${language === 'Spanish' ? `
+        DEBES escribir TODO en ESPAÑOL. Esto incluye:
+        - Todas las búsquedas de noticias → en español
+        - Todos los títulos y encabezados → en español
+        - Todo el análisis y contexto → en español
+        - Cada palabra y oración → en español
+
+        Si usas inglés en CUALQUIER parte, habrás FALLADO completamente.
+        No hay excepciones. TODO debe estar en español.
+        ` : `
+        You MUST write EVERYTHING in ${language}. This includes:
+        - All news searches → in ${language}
+        - All headlines and titles → in ${language}
+        - All analysis and context → in ${language}
+        - Every single word and sentence → in ${language}
+
+        If you use English in ANY part, you have FAILED completely.
+        There are no exceptions. EVERYTHING must be in ${language}.
+        `}
+
+        ═══════════════════════════════════════════════════
 
         You are an expert news analyst and investigative journalist committed to factual accuracy, intellectual honesty, and editorial integrity.
         TODAY'S DATE: ${dateString}
@@ -255,6 +309,16 @@ class GeminiService {
       // SDK native response.text() is robust when tools are used
       const text = response.text || '';
       console.log(`Fetched news briefing, length: ${text.length} characters`);
+      console.log('🔍 DEBUG - First 200 chars of fetched news:', text.substring(0, 200));
+
+      // Validate language
+      const languageCheck = validateLanguage(text, language);
+      console.log(`🔍 LANGUAGE VALIDATION - Expected: ${language}, Detected: ${languageCheck.detectedLanguage}, Valid: ${languageCheck.isValid}`);
+      if (!languageCheck.isValid) {
+        console.error(`❌ LANGUAGE MISMATCH: News was generated in ${languageCheck.detectedLanguage} instead of ${language}!`);
+        console.error('This indicates the language instruction is being ignored by the model.');
+      }
+
       if (!text) {
         console.warn('Gemini returned empty text for news briefing.');
         return { text: `Trending News Briefing for ${region}: [Content generation failed or returned empty]`, grounding: [] };
@@ -274,12 +338,36 @@ class GeminiService {
 
   async generatePodcastScript(trends: string, language: string, duration: string = '1:30', hostLead: string = 'Joe', hostExpert: string = 'Jane') {
     try {
+      console.log('🔍 DEBUG - Script generation language parameter:', language);
+      console.log('🔍 DEBUG - First 200 chars of news input to script:', trends.substring(0, 200));
+
+      const languageInstruction = language === 'Spanish'
+        ? `IDIOMA OBLIGATORIO: ESPAÑOL
+
+⚠️ CRÍTICO: El guion COMPLETO debe estar en ESPAÑOL.
+- Cada línea de diálogo → en español
+- Todas las palabras del guion → en español
+- La introducción y despedida → en español
+- TODO EL CONTENIDO → en español
+
+NO uses inglés en NINGUNA parte. Si escribes aunque sea UNA palabra en inglés, habrás fallado.`
+        : `MANDATORY LANGUAGE: ${language}
+
+⚠️ CRITICAL: The ENTIRE script must be in ${language}.
+- Every line of dialogue → in ${language}
+- All words in the script → in ${language}
+- The introduction and sign-off → in ${language}
+- ALL CONTENT → in ${language}
+
+Do NOT use English at all. If you write even ONE word in English, you have failed.`;
+
       const response = await this.ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: [{
           role: 'user', parts: [{
-            text: `You are writing a podcast script for VoxTrends, a daily news briefing show committed to factual accuracy and editorial integrity. Create a ${duration} episode based on these trends: ${trends}.
-        Language: ${language}.
+            text: `${languageInstruction}
+
+You are writing a podcast script for VoxTrends, a daily news briefing show committed to factual accuracy and editorial integrity. Create a ${duration} episode based on these trends: ${trends}.
 
         Hosts:
         - ${hostLead}: High-energy, charismatic main host. Real person, warm personality.
@@ -323,7 +411,19 @@ class GeminiService {
         }
       });
       // Corrected to use response.text for this specific SDK version
-      return response.text || '';
+      const script = response.text || '';
+      console.log('🔍 DEBUG - Generated script length:', script.length);
+      console.log('🔍 DEBUG - First 200 chars of generated script:', script.substring(0, 200));
+
+      // Validate script language
+      const scriptLanguageCheck = validateLanguage(script, language);
+      console.log(`🔍 SCRIPT LANGUAGE VALIDATION - Expected: ${language}, Detected: ${scriptLanguageCheck.detectedLanguage}, Valid: ${scriptLanguageCheck.isValid}`);
+      if (!scriptLanguageCheck.isValid) {
+        console.error(`❌ SCRIPT LANGUAGE MISMATCH: Script was generated in ${scriptLanguageCheck.detectedLanguage} instead of ${language}!`);
+        console.error('This indicates the script generation is ignoring the language instruction, even though news was in the correct language.');
+      }
+
+      return script;
     } catch (error) {
       console.error('Script Gen Error:', error);
       throw error;
@@ -625,6 +725,7 @@ serve(async (req) => {
     const isVoiceVariantAction = body.action === 'generate-voice-variant';
 
     console.log(isAskAction ? 'Q&A request received' : isVoiceVariantAction ? 'Voice variant request received' : 'Edition request:', { editionType, region, language, forceRefresh, voiceId });
+    console.log('🔍 DEBUG - Language received from request:', language);
 
     // Select voice profile
     const profileKey = (VOICE_PROFILES[voiceId as VoiceId] ? voiceId : 'originals') as VoiceId;
@@ -841,7 +942,7 @@ GUIDELINES:
           user_id: user.id,
           voice_id,
           audio_url: audioUrl,
-          generation_time_ms: Date.now(),
+          generation_time_ms: Date.now() - startTime,
           cost_estimate: 0.05,
         })
         .select()
@@ -1010,15 +1111,54 @@ GUIDELINES:
           }
         }
 
+        // ==================== IMAGEN FALLBACK FOR CACHED EDITIONS ====================
+        // If cached edition has no image (Imagen failed during initial generation), try regenerating
+        let imageUrl = cachedEdition.image_url;
+        if (!imageUrl && cachedEdition.content) {
+          console.log('⚠️ Cached edition missing image, attempting to regenerate...');
+          try {
+            const gemini = new GeminiService(Deno.env.get('GEMINI_API_KEY') ?? '');
+            const firstTopic = cachedEdition.content.split('\n')
+              .find((line: string) => line.trim().length > 5)
+              ?.replace(/[*#]/g, '')
+              ?.trim()
+              ?.slice(0, 100) || 'Daily News Briefing';
+
+            // Try with timeout and fallback
+            const withTimeout = <T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+              const timeout = new Promise<T>((_, reject) =>
+                setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
+              );
+              return Promise.race([promise, timeout]).catch(() => fallback);
+            };
+
+            imageUrl = await withTimeout(gemini.generateCoverArt(firstTopic), 45000, null);
+
+            if (imageUrl) {
+              console.log('✅ Image regenerated successfully, updating cached edition...');
+              // Update the cached edition with the new image
+              await supabaseClient
+                .from('daily_editions')
+                .update({ image_url: imageUrl })
+                .eq('id', cachedEdition.id);
+            } else {
+              console.warn('⚠️ Image regeneration failed or timed out');
+            }
+          } catch (imageError: any) {
+            console.error('❌ Image regeneration error:', imageError);
+            // Continue without image - don't fail the request
+          }
+        }
+
         // ==================== PHASE 3: RETURN CACHED SCRIPT-READY EDITION ====================
-        console.log('✅ Returning cached edition (script-ready)' + (audioUrl ? ' with audio' : ''));
+        console.log('✅ Returning cached edition (script-ready)' + (audioUrl ? ' with audio' : '') + (imageUrl ? ' with image' : ' (no image)'));
         return new Response(
           JSON.stringify({
             data: {
               edition_id: cachedEdition.id,
               text: cachedEdition.content,
               script: cachedEdition.script,
-              imageUrl: cachedEdition.image_url,
+              imageUrl: imageUrl,  // Use potentially regenerated imageUrl
               links: cachedEdition.grounding_links,
               flashSummary: cachedEdition.flash_summary,
               audio: audioUrl,
@@ -1105,7 +1245,7 @@ GUIDELINES:
     console.log('Steps 2+3: Generating flash summary and cover art in parallel...');
     const [flashSummary, imageUrl] = await Promise.all([
       gemini.generateFlashSummary(trendingNews, language).catch((e: any) => { console.error('Summary error:', e); return ''; }),
-      withTimeout(gemini.generateCoverArt(firstTopic), 30000, null).catch((e: any) => { console.error('Image error:', e); return null; }),
+      withTimeout(gemini.generateCoverArt(firstTopic), 45000, null).catch((e: any) => { console.error('Image generation failed or timed out:', e); return null; }),
     ]);
 
     console.log('Step 4: Generating podcast script (90s)...');
