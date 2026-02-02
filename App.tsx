@@ -761,13 +761,88 @@ const ShareModal: React.FC<{
     </div>
   );
 };
+// ==================== LANDING PAGE ====================
+const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
+  const bars = Array.from({ length: 80 }, (_, i) => {
+    const w1 = Math.sin(i * Math.PI / 20) * 0.5 + 0.5;
+    const w2 = Math.sin(i * Math.PI / 8 + 1) * 0.25;
+    return 0.15 + w1 * 0.55 + w2 * 0.2;
+  });
+
+  return (
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
+      <style>{`@keyframes vox-pulse{0%,100%{transform:scaleY(0.3)}50%{transform:scaleY(1)}}`}</style>
+
+      {/* Animated waveform — fills background */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="flex items-center gap-[3px] w-full px-4 md:px-16" style={{ height: '70vh' }}>
+          {bars.map((h, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-full"
+              style={{
+                height: `${h * 100}%`,
+                background: `rgba(139, 92, 246, ${0.04 + h * 0.07})`,
+                animation: `vox-pulse ${1.4 + (i % 6) * 0.22}s ease-in-out infinite`,
+                animationDelay: `${i * 0.04}s`,
+                transformOrigin: 'center',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 text-center px-6 flex flex-col items-center">
+        {/* Logo */}
+        <div className="flex items-center justify-center mb-8" style={{ width: 72, height: 72 }}>
+          <div className="w-full h-full bg-violet-600 rounded-[1.5rem] flex items-center justify-center shadow-2xl shadow-violet-600/40">
+            <ICONS.Podcast className="w-10 h-10 text-white" />
+          </div>
+        </div>
+
+        {/* Brand */}
+        <p className="text-violet-400 font-mono text-xs tracking-[0.35em] uppercase mb-5">VoxTrends</p>
+
+        {/* Headline */}
+        <h1 className="text-5xl md:text-6xl font-serif font-bold text-white leading-[1.1] mb-5">
+          The truth,<br />one story at a time.
+        </h1>
+
+        {/* Sub */}
+        <p className="text-zinc-500 text-base md:text-lg max-w-md mx-auto mb-12 leading-relaxed">
+          AI-curated daily news briefings. Multiple perspectives, no spin — delivered as a podcast you actually want to listen to.
+        </p>
+
+        {/* CTA */}
+        <button
+          onClick={onStart}
+          className="px-10 py-4 bg-violet-600 hover:bg-violet-500 text-white font-black text-base rounded-2xl shadow-lg shadow-violet-600/30 hover:shadow-violet-600/50 transition-all"
+        >
+          Start Listening Today
+        </button>
+
+        {/* Value props */}
+        <div className="mt-14 flex flex-col sm:flex-row items-center gap-4 sm:gap-8">
+          {['Morning · Midday · Evening', '3 AI voice pairs', 'Deep-dive any story'].map((label) => (
+            <div key={label} className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-violet-600" />
+              <span className="text-xs text-zinc-600 font-mono">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ==================== MAIN APP COMPONENT ====================
 
 const App: React.FC = () => {
   // Authentication state
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
+  const [authView, setAuthView] = useState<'landing' | 'login' | 'signup'>('landing');
   const [authLoading, setAuthLoading] = useState(true);
 
   // Application state
@@ -1129,7 +1204,8 @@ const App: React.FC = () => {
       await auth.signOut();
       setUser(null);
       setUserProfile(null);
-      setView('landing');
+      setView('dashboard');
+      setAuthView('landing');
       setToastMessage('Logged out successfully');
     } catch (error) {
       console.error('Logout error:', error);
@@ -1166,11 +1242,13 @@ const App: React.FC = () => {
   }
 
   if (!authUser) {
+    if (authView === 'landing') {
+      return <LandingPage onStart={() => setAuthView('login')} />;
+    }
     if (authView === 'login') {
       return <LoginScreen onSwitchToSignup={() => setAuthView('signup')} />;
-    } else {
-      return <SignupScreen onSwitchToLogin={() => setAuthView('login')} />;
     }
+    return <SignupScreen onSwitchToLogin={() => setAuthView('login')} />;
   }
 
   const currentEditionKey = getEditionKey(activeTab, region, language);
