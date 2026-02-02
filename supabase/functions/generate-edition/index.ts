@@ -724,8 +724,15 @@ serve(async (req) => {
     const isAskAction = body.action === 'ask';
     const isVoiceVariantAction = body.action === 'generate-voice-variant';
 
-    console.log(isAskAction ? 'Q&A request received' : isVoiceVariantAction ? 'Voice variant request received' : 'Edition request:', { editionType, region, language, forceRefresh, voiceId });
-    console.log('🔍 DEBUG - Language received from request:', language);
+    // Log appropriate parameters based on action type
+    if (isAskAction) {
+      console.log('Q&A request received:', { question: body.question?.substring(0, 50) + '...', language: body.language });
+    } else if (isVoiceVariantAction) {
+      console.log('Voice variant request received:', { edition_id: body.edition_id, voice_id: body.voice_id });
+    } else {
+      console.log('Edition request:', { editionType, region, language, forceRefresh, voiceId, generateAudio });
+      console.log('🔍 DEBUG - Language received from request:', language);
+    }
 
     // Select voice profile
     const profileKey = (VOICE_PROFILES[voiceId as VoiceId] ? voiceId : 'originals') as VoiceId;
