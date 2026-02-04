@@ -200,7 +200,11 @@ const DossierText: React.FC<{ text: string; language: string }> = ({ text, langu
   );
 };
 
-const FlashDossier: React.FC<{ text: string; language: string }> = ({ text, language }) => {
+const FlashDossier: React.FC<{
+  text: string;
+  language: string;
+  onTargetedAsk?: (topic: string, angle: { label: string; prompt: string }) => void;
+}> = ({ text, language, onTargetedAsk }) => {
   const sections = text.split(/\*\*([^*]+)\*\*/g);
   const formattedSections: { title: string; content: string }[] = [];
 
@@ -217,18 +221,24 @@ const FlashDossier: React.FC<{ text: string; language: string }> = ({ text, lang
 
   const intro = sections[0].trim();
 
+  const investigationAngles = [
+    { label: "Strategic", prompt: "Perform a strategic analysis focused exclusively on this topic: [TOPIC]. What are the long-term implications and potential future scenarios?" },
+    { label: "Economic", prompt: "Analyze the economic and financial impact specifically for this topic: [TOPIC]. How does it affect markets or value chains?" },
+    { label: "Social", prompt: "What is the social and cultural impact of this development: [TOPIC]? How does it affect the general population or public sentiment?" }
+  ];
+
   return (
     <div className="space-y-6">
       {intro && intro.length > 10 && (
         <p className="text-[10px] text-zinc-600 font-mono uppercase tracking-widest pl-2 italic">{intro}</p>
       )}
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-6">
         {formattedSections.map((section, idx) => (
-          <div key={idx} className="relative bg-zinc-900/10 border border-zinc-900/50 rounded-3xl overflow-hidden group hover:bg-zinc-900/30 hover:border-violet-600/30 transition-all duration-500">
+          <div key={idx} className="relative bg-zinc-900/10 border border-zinc-900/50 rounded-3xl md:rounded-[2.5rem] overflow-hidden group hover:bg-zinc-900/30 hover:border-violet-600/30 transition-all duration-500">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <span className="text-6xl font-black font-mono leading-none select-none tracking-tighter">0{idx + 1}</span>
             </div>
-            <div className="p-6 md:p-8 space-y-5">
+            <div className="p-6 md:p-10 space-y-6">
               <div className="flex items-center gap-3">
                 <div className="w-1 h-4 bg-violet-600 rounded-full shadow-[0_0_10px_rgba(124,58,237,0.4)]" />
                 <h5 className="text-sm font-bold text-white group-hover:text-violet-400 transition-colors uppercase tracking-widest">
@@ -236,6 +246,20 @@ const FlashDossier: React.FC<{ text: string; language: string }> = ({ text, lang
                 </h5>
               </div>
               <DossierText text={section.content} language={language} />
+
+              {onTargetedAsk && (
+                <div className="pt-4 border-t border-zinc-900/50 flex flex-wrap gap-2">
+                  {investigationAngles.map((angle, aidx) => (
+                    <button
+                      key={aidx}
+                      onClick={() => onTargetedAsk(section.title, angle)}
+                      className="px-3 py-1.5 bg-zinc-950 border border-zinc-900 rounded-lg text-[9px] font-bold text-zinc-500 uppercase tracking-wider hover:border-violet-600/50 hover:text-violet-400 transition-all"
+                    >
+                      {angle.label} Analysis
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -454,14 +478,17 @@ const ResearchDisplay: React.FC<{
 };
 
 // Auto-Scrolling Chat Component with Mobile-Optimized Collapsible Design
-const InterrogationHub: React.FC<{
-  context: string;
-  language: string;
-  history: ChatMessage[];
-  setHistory: (h: ChatMessage[]) => void;
-  investigationAngles?: { label: string; prompt: string }[];
-  targetTitle?: string;
-}> = ({ context, language, history, setHistory, investigationAngles = [], targetTitle }) => {
+const InterrogationHub = React.forwardRef<
+  { handleAsk: (q: string) => void },
+  {
+    context: string;
+    language: string;
+    history: ChatMessage[];
+    setHistory: (h: ChatMessage[]) => void;
+    investigationAngles?: { label: string; prompt: string }[];
+    targetTitle?: string;
+  }
+>(({ context, language, history, setHistory, investigationAngles = [], targetTitle }, ref) => {
   const t = translations[language as keyof typeof translations] || translations.English;
   const [question, setQuestion] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -471,6 +498,33 @@ const InterrogationHub: React.FC<{
   const recognitionRef = useRef<any>(null);
 
   const speechLang = language === 'Spanish' ? 'es-ES' : 'en-US';
+
+  const handleAsk = async (explicitQuestion?: string) => {
+    const q = explicitQuestion || question;
+    if (!q.trim()) return;
+
+    if (collapsed) setCollapsed(false);
+
+    setThinking(true);
+    if (!explicitQuestion) setQuestion('');
+
+    const newContextHistory: ChatMessage[] = [...history, { role: 'user' as const, text: q }];
+    setHistory(newContextHistory);
+
+    try {
+      const result = await backend.askQuestion(context, q, history, language);
+      setHistory([...newContextHistory, { role: 'model' as const, text: result }]);
+    } catch (error) {
+      console.error('Interrogation error:', error);
+      setHistory([...newContextHistory, { role: 'model' as const, text: 'Unable to process inquiry. Please try again.' }]);
+    } finally {
+      setThinking(false);
+    }
+  };
+
+  React.useImperativeHandle(ref, () => ({
+    handleAsk: (q: string) => handleAsk(q)
+  }));
 
   const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -500,29 +554,6 @@ const InterrogationHub: React.FC<{
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [history, collapsed]);
-
-  const handleAsk = async (explicitQuestion?: string) => {
-    const q = explicitQuestion || question;
-    if (!q.trim()) return;
-
-    if (collapsed) setCollapsed(false);
-
-    setThinking(true);
-    if (!explicitQuestion) setQuestion('');
-
-    const newContextHistory: ChatMessage[] = [...history, { role: 'user' as const, text: q }];
-    setHistory(newContextHistory);
-
-    try {
-      const result = await backend.askQuestion(context, q, history, language);
-      setHistory([...newContextHistory, { role: 'model' as const, text: result }]);
-    } catch (error) {
-      console.error('Interrogation error:', error);
-      setHistory([...newContextHistory, { role: 'model' as const, text: 'Unable to process inquiry. Please try again.' }]);
-    } finally {
-      setThinking(false);
-    }
-  };
 
   return (
     <div className="space-y-8">
@@ -558,14 +589,14 @@ const InterrogationHub: React.FC<{
         <div className="space-y-10">
           {/* Chat History */}
           {history.length > 0 && (
-            <div className="space-y-8 max-h-[600px] overflow-y-auto pr-6 custom-scrollbar">
+            <div className="space-y-8 md:max-h-[600px] overflow-y-auto pr-6 custom-scrollbar">
               {history.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[85%] relative ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <p className={`text-[10px] font-mono uppercase tracking-widest mb-2 ${m.role === 'user' ? 'text-right text-violet-500' : 'text-zinc-600 pl-4'}`}>
                       {m.role === 'user' ? 'Investigator' : 'Neural Core'}
                     </p>
-                    <div className={`p-6 md:p-10 rounded-[2.5rem] shadow-2xl ${m.role === 'user'
+                    <div className={`p-5 md:p-10 rounded-3xl md:rounded-[2.5rem] shadow-2xl ${m.role === 'user'
                       ? 'bg-gradient-to-br from-violet-600 to-violet-700 text-white'
                       : 'bg-zinc-900/80 border border-zinc-800 backdrop-blur-xl'}`}>
                       <RichText text={m.text} language={language} />
@@ -616,8 +647,8 @@ const InterrogationHub: React.FC<{
 
           {/* Input Terminal */}
           <div className="relative group">
-            <div className="absolute inset-0 bg-violet-600/5 rounded-[2.5rem] blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
-            <div className="relative bg-zinc-950/80 border border-zinc-800/80 group-focus-within:border-violet-600/50 rounded-[2.5rem] p-4 pr-4 backdrop-blur-md transition-all flex flex-col gap-2">
+            <div className="absolute inset-0 bg-violet-600/5 rounded-2xl md:rounded-[2.5rem] blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
+            <div className="relative bg-zinc-950/80 border border-zinc-800/80 group-focus-within:border-violet-600/50 rounded-2xl md:rounded-[2.5rem] p-3 md:p-4 pr-4 backdrop-blur-md transition-all flex flex-col gap-2">
               <div className="flex items-start gap-4 px-4 overflow-hidden">
                 <span className="text-violet-600 font-mono text-2xl mt-1 select-none">&gt;</span>
                 <textarea
@@ -699,7 +730,7 @@ const InterrogationHub: React.FC<{
       )}
     </div>
   );
-};
+});
 
 // Share Modal Component
 // Enhanced Share Modal with Beautiful PDF Export
@@ -1112,6 +1143,8 @@ const App: React.FC = () => {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [loadingStory, setLoadingStory] = useState<string[]>([]);
 
+  const interrogationRef = useRef<{ handleAsk: (q: string) => void }>(null);
+
   const t = translations[language as keyof typeof translations] || translations.English;
 
   // ==================== AUTHENTICATION LOGIC ====================
@@ -1376,6 +1409,16 @@ const App: React.FC = () => {
     } finally {
       setVoiceGenerating(false);
     }
+  };
+
+  const handleTargetedAsk = (topic: string, angle: { label: string; prompt: string }) => {
+    if (view !== 'intel') setView('intel');
+    const question = angle.prompt.replace('[TOPIC]', topic);
+
+    // Small delay to ensure view transition if needed
+    setTimeout(() => {
+      interrogationRef.current?.handleAsk(question);
+    }, 100);
   };
 
   const saveToVault = async (
@@ -2043,12 +2086,16 @@ const App: React.FC = () => {
                       <div className="space-y-8">
                         <div className="space-y-4">
                           <h4 className="text-[10px] font-mono text-violet-500 uppercase tracking-widest pl-2">Flash Summary // Active Intelligence</h4>
-                          <FlashDossier text={currentDaily.flashSummary || "Analyzing feed for summary..."} language={language} />
+                          <FlashDossier
+                            text={currentDaily.flashSummary || "Analyzing feed for summary..."}
+                            language={language}
+                            onTargetedAsk={handleTargetedAsk}
+                          />
                         </div>
 
                         <div className="space-y-3">
                           <h4 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Verified Sources</h4>
-                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                          <div className="space-y-2 md:max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                             {currentDaily.links.map((link, i) => (
                               <a
                                 key={i}
@@ -2075,11 +2122,12 @@ const App: React.FC = () => {
 
                 {/* Right Panel: Interrogation Terminal */}
                 <div className="lg:col-span-8">
-                  <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-10 relative overflow-hidden">
+                  <section className="bg-zinc-950 border border-zinc-900 rounded-2xl md:rounded-[3rem] p-6 md:p-10 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/5 blur-[100px] -z-10" />
 
                     {currentDaily ? (
                       <InterrogationHub
+                        ref={interrogationRef}
                         context={currentDaily.text}
                         language={language}
                         history={currentDaily.chatHistory || []}
