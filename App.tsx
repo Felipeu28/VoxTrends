@@ -276,7 +276,10 @@ const BroadcastStage: React.FC<{
   region: string;
   onSave: () => void;
   selectedVoiceId: string;
-}> = ({ daily, activeTab, region, onSave, selectedVoiceId }) => {
+  hasAudio: boolean;
+  isPlaying: boolean;
+  onPlayPause: () => void;
+}> = ({ daily, activeTab, region, onSave, selectedVoiceId, hasAudio, isPlaying, onPlayPause }) => {
   return (
     <div className="relative w-full aspect-[4/5] md:aspect-[21/9] rounded-[2.5rem] overflow-hidden shadow-2xl group isolate">
       {/* Hero Image with Parallax-like scale */}
@@ -312,7 +315,25 @@ const BroadcastStage: React.FC<{
             The Daily<br />Briefing
           </h1>
 
-          <div className="flex flex-wrap items-center gap-6 pt-4">
+          <div className="flex flex-wrap items-center gap-4 md:gap-6 pt-4">
+            {/* Play Button - Prominent on Stage */}
+            {hasAudio && (
+              <button
+                onClick={onPlayPause}
+                className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 hover:bg-violet-50 transition-all shadow-[0_0_30px_rgba(255,255,255,0.3)] mr-4 group/play"
+              >
+                {isPlaying ? (
+                  <svg className="w-6 h-6 md:w-7 md:h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M10 9v6m4-6v6" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 md:w-7 md:h-7 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  </svg>
+                )}
+              </button>
+            )}
+
             {/* Host Badge */}
             <div className="flex items-center gap-3 pr-6 border-r border-white/20">
               <div className="flex -space-x-3">
@@ -2025,6 +2046,15 @@ const App: React.FC = () => {
                       region={region}
                       onSave={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
                       selectedVoiceId={selectedVoiceId}
+                      hasAudio={!!currentDaily.audio}
+                      isPlaying={playingClipId === `edition-${activeTab}`}
+                      onPlayPause={() => {
+                        if (playingClipId === `edition-${activeTab}`) {
+                          setPlayingClipId(null);
+                        } else {
+                          setPlayingClipId(`edition-${activeTab}`);
+                        }
+                      }}
                     />
 
                     {/* Voice Selector */}
