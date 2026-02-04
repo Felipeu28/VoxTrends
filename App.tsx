@@ -16,6 +16,7 @@ import QuotaDisplay from './components/QuotaDisplay';
 import UpgradeModal from './components/UpgradeModal';
 import PricingPage from './components/PricingPage';
 import VoiceSelector from './components/VoiceSelector';
+import BroadcastTuner from './components/BroadcastTuner';
 
 interface DailyData {
   text: string;
@@ -118,7 +119,7 @@ const Toast: React.FC<{ message: string; visible: boolean; onHide: () => void }>
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-24 md:bottom-10 left-1/2 -translate-x-1/2 bg-violet-600 text-white px-8 py-4 rounded-2xl shadow-2xl z-[100] font-bold text-sm animate-in slide-in-from-bottom duration-300 flex items-center gap-3">
+    <div translate="no" className="fixed bottom-24 md:bottom-10 left-1/2 -translate-x-1/2 bg-violet-600 text-white px-8 py-4 rounded-2xl shadow-2xl z-[100] font-bold text-sm animate-in slide-in-from-bottom duration-300 flex items-center gap-3">
       {message}
     </div>
   );
@@ -242,9 +243,9 @@ const ProgressBar: React.FC<{
       <div className="px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 border-3 border-violet-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-mono text-violet-400">{status}</p>
+          <p translate="no" className="text-sm font-mono text-violet-400">{status}</p>
         </div>
-        <p className="text-xs text-zinc-600">{Math.round(progress)}%</p>
+        <p translate="no" className="text-xs text-zinc-600">{Math.round(progress)}%</p>
       </div>
     </div>
   );
@@ -432,7 +433,7 @@ const InterrogationHub: React.FC<{
                   {listening ? (
                     <rect x="6" y="6" width="12" height="12" rx="2" fill="white" />
                   ) : (
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z"/>
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
                   )}
                 </svg>
               </button>
@@ -847,7 +848,7 @@ const App: React.FC = () => {
 
   // Application state
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<'landing' | 'dashboard' | 'profile'>('landing');
+  const [view, setView] = useState<'broadcast' | 'intel' | 'vault'>('broadcast');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [region, setRegion] = useState('Global');
@@ -897,7 +898,7 @@ const App: React.FC = () => {
             });
             setRegion(profile.region);
             setLanguage(profile.language);
-            setView('dashboard');
+            setView('broadcast');
 
             // Load user's saved clips
             const clips = await db.getUserClips(currentUser.id);
@@ -941,12 +942,12 @@ const App: React.FC = () => {
             region: profile.region,
             language: profile.language,
           });
-          setView('dashboard');
+          setView('broadcast');
         }
       } else {
         setUserProfile(null);
         setUser(null);
-        setView('landing');
+        setView('broadcast'); // Reset to broadcast instead of landing for public access
       }
     });
 
@@ -1204,7 +1205,9 @@ const App: React.FC = () => {
       await auth.signOut();
       setUser(null);
       setUserProfile(null);
-      setView('dashboard');
+      setUser(null);
+      setUserProfile(null);
+      setView('broadcast');
       setAuthView('landing');
       setToastMessage('Logged out successfully');
     } catch (error) {
@@ -1262,113 +1265,121 @@ const App: React.FC = () => {
       <Toast message={toastMessage || ''} visible={!!toastMessage} onHide={() => setToastMessage(null)} />
       <ProgressBar loading={loading} status={status} />
 
-      {shareClip && (
-        <ShareModal
-          clip={shareClip}
-          language={language}
-          onClose={() => setShareClip(null)}
-        />
-      )}
+      {
+        shareClip && (
+          <ShareModal
+            clip={shareClip}
+            language={language}
+            onClose={() => setShareClip(null)}
+          />
+        )
+      }
 
       {/* Pricing Modal */}
-      {showPricing && (
-        <PricingPage
-          onClose={() => setShowPricing(false)}
-          userPlan={user?.plan || 'Free'}
-        />
-      )}
+      {
+        showPricing && (
+          <PricingPage
+            onClose={() => setShowPricing(false)}
+            userPlan={user?.plan || 'Free'}
+          />
+        )
+      }
 
       {/* Mobile Settings Modal */}
-      {showMobileSettings && (
-        <div className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-xl flex items-end animate-in fade-in md:hidden">
-          <div className="w-full bg-zinc-950 rounded-t-[3rem] p-10 border-t border-zinc-800 animate-in slide-in-from-bottom duration-500">
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-2xl font-serif font-bold">{t.preferences}</h3>
-              <button onClick={() => setShowMobileSettings(false)} className="p-3 bg-zinc-900 rounded-full">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+      {
+        showMobileSettings && (
+          <div className="fixed inset-0 z-[250] bg-black/90 backdrop-blur-xl flex items-end animate-in fade-in md:hidden">
+            <div className="w-full bg-zinc-950 rounded-t-[3rem] p-10 border-t border-zinc-800 animate-in slide-in-from-bottom duration-500">
+              <div className="flex justify-between items-center mb-10">
+                <h3 className="text-2xl font-serif font-bold">{t.preferences}</h3>
+                <button onClick={() => setShowMobileSettings(false)} className="p-3 bg-zinc-900 rounded-full">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-8">
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">{t.region}</label>
+                  <select
+                    value={region}
+                    onChange={(e) => {
+                      setRegion(e.target.value);
+                      if (authUser && userProfile) {
+                        db.updateUser(authUser.id, { region: e.target.value });
+                      }
+                      setShowMobileSettings(false);
+                    }}
+                    className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="Global">Global 🌎</option>
+                    <option value="USA">USA 🇺🇸</option>
+                    <option value="Europe">Europe 🇪🇺</option>
+                    <option value="Asia">Asia 🌏</option>
+                    <option value="Colombia">Colombia 🇨🇴</option>
+                    <option value="Venezuela">Venezuela 🇻🇪</option>
+                  </select>
+                </div>
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">{t.language}</label>
+                  <select
+                    value={language}
+                    onChange={(e) => {
+                      setLanguage(e.target.value);
+                      if (authUser && userProfile) {
+                        db.updateUser(authUser.id, { language: e.target.value });
+                      }
+                      setShowMobileSettings(false);
+                    }}
+                    className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
+                  >
+                    <option value="English">English 🇬🇧</option>
+                    <option value="Spanish">Spanish 🇪🇸</option>
+                  </select>
+                </div>
+                <div className="pt-6 border-t border-zinc-800 space-y-3">
+                  <button
+                    onClick={() => setShowClearCacheConfirm(true)}
+                    className="w-full px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-2xl font-bold text-sm transition"
+                  >
+                    🗑️ Clear Cache
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="space-y-8">
-              <div className="space-y-3">
-                <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">{t.region}</label>
-                <select
-                  value={region}
-                  onChange={(e) => {
-                    setRegion(e.target.value);
-                    if (authUser && userProfile) {
-                      db.updateUser(authUser.id, { region: e.target.value });
-                    }
-                    setShowMobileSettings(false);
-                  }}
-                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
-                >
-                  <option value="Global">Global 🌎</option>
-                  <option value="USA">USA 🇺🇸</option>
-                  <option value="Europe">Europe 🇪🇺</option>
-                  <option value="Asia">Asia 🌏</option>
-                  <option value="Colombia">Colombia 🇨🇴</option>
-                  <option value="Venezuela">Venezuela 🇻🇪</option>
-                </select>
+          </div>
+        )
+      }
+
+      {/* Clear Cache Confirmation Modal */}
+      {
+        showClearCacheConfirm && (
+          <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in">
+            <div className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-[2rem] p-8 space-y-6 shadow-2xl animate-in zoom-in">
+              <div className="space-y-3 text-center">
+                <h3 className="text-2xl font-serif font-bold">Clear Cache?</h3>
+                <p className="text-sm text-zinc-400">
+                  This will remove all locally cached editions. You'll need to refresh to load new content.
+                </p>
               </div>
-              <div className="space-y-3">
-                <label className="text-xs font-black text-zinc-600 uppercase tracking-widest">{t.language}</label>
-                <select
-                  value={language}
-                  onChange={(e) => {
-                    setLanguage(e.target.value);
-                    if (authUser && userProfile) {
-                      db.updateUser(authUser.id, { language: e.target.value });
-                    }
-                    setShowMobileSettings(false);
-                  }}
-                  className="w-full bg-black border border-zinc-800 rounded-2xl py-4 px-6 text-sm font-bold text-white focus:outline-none appearance-none cursor-pointer"
-                >
-                  <option value="English">English 🇬🇧</option>
-                  <option value="Spanish">Spanish 🇪🇸</option>
-                </select>
-              </div>
-              <div className="pt-6 border-t border-zinc-800 space-y-3">
+              <div className="flex gap-3">
                 <button
-                  onClick={() => setShowClearCacheConfirm(true)}
-                  className="w-full px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-2xl font-bold text-sm transition"
+                  onClick={() => setShowClearCacheConfirm(false)}
+                  className="flex-1 px-4 py-3 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700 rounded-xl font-bold transition"
                 >
-                  🗑️ Clear Cache
+                  Cancel
+                </button>
+                <button
+                  onClick={handleClearCache}
+                  className="flex-1 px-4 py-3 bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30 rounded-xl font-bold transition"
+                >
+                  Clear Cache
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Clear Cache Confirmation Modal */}
-      {showClearCacheConfirm && (
-        <div className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in">
-          <div className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-[2rem] p-8 space-y-6 shadow-2xl animate-in zoom-in">
-            <div className="space-y-3 text-center">
-              <h3 className="text-2xl font-serif font-bold">Clear Cache?</h3>
-              <p className="text-sm text-zinc-400">
-                This will remove all locally cached editions. You'll need to refresh to load new content.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowClearCacheConfirm(false)}
-                className="flex-1 px-4 py-3 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700 rounded-xl font-bold transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClearCache}
-                className="flex-1 px-4 py-3 bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30 rounded-xl font-bold transition"
-              >
-                Clear Cache
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Sidebar */}
       <aside className="hidden md:flex w-72 border-r border-zinc-900 flex-col p-8 gap-10 bg-zinc-950/20 shrink-0 h-screen sticky top-0 overflow-y-auto">
@@ -1379,16 +1390,24 @@ const App: React.FC = () => {
 
         <nav className="flex-1 space-y-2">
           <button
-            onClick={() => setView('dashboard')}
-            className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'dashboard' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-white'}`}
+            onClick={() => setView('broadcast')}
+            className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'broadcast' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
-            <ICONS.Trend className="w-5 h-5" />
-            <span className="font-bold">Dashboard</span>
+            <ICONS.Podcast className="w-5 h-5" />
+            <span className="font-bold">Broadcast</span>
           </button>
 
           <button
-            onClick={() => setView('profile')}
-            className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'profile' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-white'}`}
+            onClick={() => setView('intel')}
+            className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'intel' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-white'}`}
+          >
+            <ICONS.Search className="w-5 h-5" />
+            <span className="font-bold">Intel Center</span>
+          </button>
+
+          <button
+            onClick={() => setView('vault')}
+            className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${view === 'vault' ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             <ICONS.FileText className="w-5 h-5" />
             <span className="font-bold">Profile & Vault</span>
@@ -1491,7 +1510,7 @@ const App: React.FC = () => {
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-4">
               <h2 className="text-lg md:text-2xl font-serif font-bold uppercase tracking-wide md:tracking-widest">
-                {view === 'dashboard' ? 'News' : 'My Vault'}
+                {view === 'broadcast' ? 'Live Feed' : view === 'intel' ? 'Intel Center' : 'My Vault'}
               </h2>
               <button
                 onClick={() => setShowMobileSettings(true)}
@@ -1500,29 +1519,12 @@ const App: React.FC = () => {
                 <ICONS.Settings className="w-5 h-5" />
               </button>
             </div>
-
-            {view === 'dashboard' && (
-              <div className="flex gap-2">
-                {[EditionType.MORNING, EditionType.MIDDAY, EditionType.EVENING].map(ed => (
-                  <button
-                    key={ed}
-                    onClick={() => setActiveTab(ed)}
-                    className={`px-3 md:px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${activeTab === ed
-                      ? 'bg-violet-600 border-violet-600 text-white'
-                      : 'bg-transparent border-zinc-800 text-zinc-500'
-                      }`}
-                  >
-                    {ed}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-4">
             {/* Desktop profile button only */}
             <button
-              onClick={() => setView(view === 'profile' ? 'dashboard' : 'profile')}
+              onClick={() => setView(view === 'vault' ? 'broadcast' : 'vault')}
               className="hidden md:flex p-3 bg-zinc-900 rounded-xl text-white items-center gap-2"
             >
               <ICONS.FileText className="w-5 h-5" />
@@ -1532,21 +1534,40 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-10 pb-24 md:pb-32">
-          {/* Dashboard View */}
-          {view === 'dashboard' && (
+          {/* Broadcast View */}
+          {view === 'broadcast' && (
             <div className="flex flex-col lg:grid lg:grid-cols-12 gap-10">
+
+              {/* Broadcast Tuner - Top of Feed */}
+              <div className="lg:col-span-12">
+                <BroadcastTuner
+                  region={region}
+                  language={language}
+                  activeEdition={activeTab}
+                  loading={loading}
+                  onRegionChange={(r) => {
+                    setRegion(r);
+                    if (authUser && userProfile) {
+                      db.updateUser(authUser.id, { region: r });
+                    }
+                  }}
+                  onLanguageChange={(l) => {
+                    setLanguage(l);
+                    if (authUser && userProfile) {
+                      db.updateUser(authUser.id, { language: l });
+                    }
+                  }}
+                  onEditionChange={setActiveTab}
+                  onRefresh={() => handleGenerateDaily(activeTab, true)}
+                />
+              </div>
+
               {/* Main Broadcast Section */}
-              <div className="lg:col-span-8 space-y-8">
+              <div className="lg:col-span-8 lg:col-start-3 space-y-8">
                 <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
                   {/* Header: Title and Edition Info */}
                   <div className="animate-in slide-in-from-top duration-700">
                     <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
-                        🌎 {region}
-                      </span>
-                      <span className="px-3 py-1 bg-violet-600/20 border border-violet-600/30 rounded-lg text-xs font-bold text-violet-400">
-                        🗣️ {language}
-                      </span>
                       {editionVariants > 1 && (
                         <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold text-zinc-500">
                           {editionVariants} version{editionVariants > 1 ? 's' : ''}
@@ -1591,34 +1612,34 @@ const App: React.FC = () => {
                 {/* Audio Player - Show if audio exists */}
                 {currentDaily && currentDaily.audio && (
                   <>
-                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 relative overflow-hidden flex justify-center">
-                    <AudioPlayer
-                      audioData={currentDaily.audio}
-                      clipId={`edition-${activeTab}`}
-                      isPlaying={playingClipId === `edition-${activeTab}`}
-                      onPlayPause={() => {
-                        if (playingClipId === `edition-${activeTab}`) {
-                          setPlayingClipId(null);
-                        } else {
-                          setPlayingClipId(`edition-${activeTab}`);
-                        }
-                      }}
-                      onEnded={() => setPlayingClipId(null)}
-                    />
-                  </section>
-                  <div className="flex justify-center">
-                    <button
-                      onClick={() => {
-                        const updatedDaily = { ...currentDaily, audio: null };
-                        const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
-                        setDailyEditions(updatedEditions);
-                        voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
-                      }}
-                      className="text-xs text-zinc-600 hover:text-violet-400 transition-colors"
-                    >
-                      Try a different voice →
-                    </button>
-                  </div>
+                    <section className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 relative overflow-hidden flex justify-center">
+                      <AudioPlayer
+                        audioData={currentDaily.audio}
+                        clipId={`edition-${activeTab}`}
+                        isPlaying={playingClipId === `edition-${activeTab}`}
+                        onPlayPause={() => {
+                          if (playingClipId === `edition-${activeTab}`) {
+                            setPlayingClipId(null);
+                          } else {
+                            setPlayingClipId(`edition-${activeTab}`);
+                          }
+                        }}
+                        onEnded={() => setPlayingClipId(null)}
+                      />
+                    </section>
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => {
+                          const updatedDaily = { ...currentDaily, audio: null };
+                          const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
+                          setDailyEditions(updatedEditions);
+                          voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+                        }}
+                        className="text-xs text-zinc-600 hover:text-violet-400 transition-colors"
+                      >
+                        Try a different voice →
+                      </button>
+                    </div>
                   </>
                 )}
 
@@ -1643,72 +1664,72 @@ const App: React.FC = () => {
                 {/* Content: Image, Text, Links, Chat */}
                 {currentDaily && (
                   <div className="space-y-10 animate-in fade-in duration-1000">
-                      <div className="w-full aspect-video rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl relative group">
-                        {currentDaily.imageUrl && (
-                          <img
-                            src={currentDaily.imageUrl}
-                            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                            alt={`${activeTab} Edition`}
-                            onError={(e) => {
-                              console.error('Frontend Image Load Error');
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1478737270239-2fccd2c7862a?auto=format&fit=crop&q=80&w=1200';
-                            }}
-                          />
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8">
-                          <p className="text-xs font-mono text-violet-400 tracking-widest uppercase">
-                            VOX HOSTS: {
-                              selectedVoiceId === 'deep-divers' ? 'MARCUS & ELENA' :
-                                selectedVoiceId === 'trendspotters' ? 'KAI & SOPHIA' :
-                                  'ALEX & JORDAN'
-                            }
-                          </p>
-                        </div>
-                      </div>
-
-                      <RichText text={currentDaily.text} language={language} />
-
-                      {/* Grounding Links */}
-                      {currentDaily.links && currentDaily.links.length > 0 && (
-                        <details open className="group border-t border-zinc-800 pt-6 md:pt-8">
-                          <summary className="flex items-center justify-between cursor-pointer list-none">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </div>
-                              <div>
-                                <h5 className="text-sm font-bold text-white">Verified Sources</h5>
-                                <p className="text-xs text-zinc-500">{currentDaily.links.length} source{currentDaily.links.length > 1 ? 's' : ''}</p>
-                              </div>
-                            </div>
-                            <svg className="w-5 h-5 text-zinc-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </summary>
-                          <div className="mt-4 space-y-3">
-                            {currentDaily.links.map((link, i) => (
-                              <a
-                                key={i}
-                                href={link.uri}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl hover:border-violet-600/50 transition-all group"
-                              >
-                                <p className="text-xs font-bold text-white group-hover:text-violet-400 truncate">
-                                  {link.title}
-                                </p>
-                                <p className="text-[10px] text-zinc-600 truncate">{link.uri}</p>
-                              </a>
-                            ))}
-                          </div>
-                        </details>
+                    <div className="w-full aspect-video rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl relative group">
+                      {currentDaily.imageUrl && (
+                        <img
+                          src={currentDaily.imageUrl}
+                          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                          alt={`${activeTab} Edition`}
+                          onError={(e) => {
+                            console.error('Frontend Image Load Error');
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1478737270239-2fccd2c7862a?auto=format&fit=crop&q=80&w=1200';
+                          }}
+                        />
                       )}
-
-                      {/* InterrogationHub moved to right research panel */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8">
+                        <p className="text-xs font-mono text-violet-400 tracking-widest uppercase">
+                          VOX HOSTS: {
+                            selectedVoiceId === 'deep-divers' ? 'MARCUS & ELENA' :
+                              selectedVoiceId === 'trendspotters' ? 'KAI & SOPHIA' :
+                                'ALEX & JORDAN'
+                          }
+                        </p>
+                      </div>
                     </div>
-                  )}
+
+                    <RichText text={currentDaily.text} language={language} />
+
+                    {/* Grounding Links */}
+                    {currentDaily.links && currentDaily.links.length > 0 && (
+                      <details open className="group border-t border-zinc-800 pt-6 md:pt-8">
+                        <summary className="flex items-center justify-between cursor-pointer list-none">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </div>
+                            <div>
+                              <h5 className="text-sm font-bold text-white">Verified Sources</h5>
+                              <p className="text-xs text-zinc-500">{currentDaily.links.length} source{currentDaily.links.length > 1 ? 's' : ''}</p>
+                            </div>
+                          </div>
+                          <svg className="w-5 h-5 text-zinc-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </summary>
+                        <div className="mt-4 space-y-3">
+                          {currentDaily.links.map((link, i) => (
+                            <a
+                              key={i}
+                              href={link.uri}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl hover:border-violet-600/50 transition-all group"
+                            >
+                              <p className="text-xs font-bold text-white group-hover:text-violet-400 truncate">
+                                {link.title}
+                              </p>
+                              <p className="text-[10px] text-zinc-600 truncate">{link.uri}</p>
+                            </a>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+
+                    {/* InterrogationHub moved to right research panel */}
+                  </div>
+                )}
 
                 {!currentDaily && !loading && (
                   <div className="py-24 flex flex-col items-center justify-center text-zinc-800 opacity-20">
@@ -1718,10 +1739,26 @@ const App: React.FC = () => {
                 )}
               </div>
 
-              {/* Research Panel - Ask Questions */}
-              {currentDaily && (
-              <div id="research-section" className="lg:col-span-4 space-y-8">
-                <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-8 sticky top-10">
+            </div>
+          )}
+
+          {/* Intel Center View - Dedicated Research Tab */}
+          {view === 'intel' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
+              <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-8 relative">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-violet-600/20">
+                    <ICONS.Search className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-3xl font-serif font-bold text-white">Intel Center</h3>
+                  <p className="text-zinc-500 mt-2">
+                    {currentDaily
+                      ? `Interrogating: ${activeTab} Edition · ${region}`
+                      : 'Select a broadcast to begin interrogation'}
+                  </p>
+                </div>
+
+                {currentDaily ? (
                   <InterrogationHub
                     context={currentDaily.text}
                     language={language}
@@ -1733,14 +1770,26 @@ const App: React.FC = () => {
                       await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
                     }}
                   />
-                </section>
-              </div>
-              )}
+                ) : (
+                  <div className="py-20 text-center border-2 border-dashed border-zinc-900 rounded-3xl">
+                    <p className="text-zinc-600 font-serif italic">
+                      No active intelligence package loaded.<br />
+                      Go to <strong>Broadcast</strong> and sync an edition first.
+                    </p>
+                    <button
+                      onClick={() => setView('broadcast')}
+                      className="mt-6 px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-zinc-800 transition"
+                    >
+                      Go to Broadcast
+                    </button>
+                  </div>
+                )}
+              </section>
             </div>
           )}
 
           {/* Profile/Vault View */}
-          {view === 'profile' && user && (
+          {view === 'vault' && user && (
             <div className="max-w-4xl mx-auto space-y-12 pb-20 animate-in fade-in">
               <section className="flex flex-col md:flex-row items-center gap-10 p-12 bg-zinc-900/20 border border-zinc-900 rounded-[3rem]">
                 <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-violet-600 shadow-2xl">
@@ -1855,33 +1904,30 @@ const App: React.FC = () => {
           <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-zinc-950 border-t border-zinc-800 safe-area-pb">
             <div className="flex items-center justify-around py-3 px-4">
               <button
-                onClick={() => setView('dashboard')}
-                className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'dashboard'
+                onClick={() => setView('broadcast')}
+                className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'broadcast'
                   ? 'bg-violet-600/20 text-violet-400'
                   : 'text-zinc-500'
                   }`}
               >
-                <ICONS.Trend className="w-6 h-6" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">News</span>
+                <ICONS.Podcast className="w-6 h-6" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Broadcast</span>
               </button>
 
               <button
-                onClick={() => {
-                  setView('dashboard');
-                  setTimeout(() => {
-                    const researchSection = document.getElementById('research-section');
-                    researchSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }, 100);
-                }}
-                className="flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all text-zinc-500"
+                onClick={() => setView('intel')}
+                className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'intel'
+                  ? 'bg-violet-600/20 text-violet-400'
+                  : 'text-zinc-500'
+                  }`}
               >
                 <ICONS.Search className="w-6 h-6" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Research</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide">Intel</span>
               </button>
 
               <button
-                onClick={() => setView('profile')}
-                className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'profile'
+                onClick={() => setView('vault')}
+                className={`flex flex-col items-center gap-1 px-6 py-2 rounded-xl transition-all ${view === 'vault'
                   ? 'bg-violet-600/20 text-violet-400'
                   : 'text-zinc-500'
                   }`}
@@ -1893,7 +1939,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-      </main >
+      </main>
 
       {/* Floating Audio Player - OUTSIDE main, INSIDE root */}
       {
