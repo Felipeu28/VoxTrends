@@ -1544,19 +1544,37 @@ const App: React.FC = () => {
       if (!audioUrl) throw new Error('No audio returned');
 
       // Update currentDaily with generated audio in the state
-      const editionKey = getEditionKey(activeTab, region, language);
-      console.log('[DEBUG] Generating Voice for Key:', editionKey, 'Audio URL:', audioUrl);
-
+      // Update by finding the edition with the matching ID
       setDailyEditions(prev => {
-        const currentDaily = prev[editionKey];
-        if (!currentDaily) {
-          console.error('[DEBUG] No currentDaily found for key:', editionKey);
-          return prev;
+        let targetKey: string | null = null;
+        let targetDaily: DailyData | null = null;
+
+        // Robust lookup: iterate keys to find matching edition_id
+        for (const [key, daily] of Object.entries(prev)) {
+          if (daily.edition_id === editionId) {
+            targetKey = key;
+            targetDaily = daily;
+            break;
+          }
         }
 
-        const updatedDaily = { ...currentDaily, audio: audioUrl };
+        if (!targetKey || !targetDaily) {
+          console.error('[DEBUG] Could not find edition with ID:', editionId);
+          // Fallback to current key if ID lookup fails
+          const fallbackKey = getEditionKey(activeTab, region, language);
+          if (prev[fallbackKey]) {
+            console.log('[DEBUG] Falling back to active key:', fallbackKey);
+            targetKey = fallbackKey;
+            targetDaily = prev[fallbackKey];
+          } else {
+            return prev;
+          }
+        }
+
+        const updatedDaily = { ...targetDaily, audio: audioUrl };
         console.log('[DEBUG] Updating Daily:', updatedDaily);
-        const updatedEditions = { ...prev, [editionKey]: updatedDaily };
+
+        const updatedEditions = { ...prev, [targetKey]: updatedDaily };
         voxDB.set(VOX_EDITIONS_KEY, updatedEditions).catch(e => console.error('Local DB Sync Error:', e));
         return updatedEditions;
       });
