@@ -159,6 +159,91 @@ const RichText: React.FC<{ text: string; language: string }> = ({ text, language
   );
 };
 
+const DossierText: React.FC<{ text: string; language: string }> = ({ text, language }) => {
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-4">
+      {lines.map((line, i) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        const isListItem = trimmed.startsWith('*') || trimmed.startsWith('-') || trimmed.startsWith('•');
+        if (isListItem) {
+          const content = trimmed.replace(/^[*•-]\s*/, '');
+          const parts = content.split(/(\*\*.*?\*\*)/g);
+          return (
+            <div key={i} className="flex gap-3 pl-2 py-0.5 group animate-in fade-in slide-in-from-left-2 duration-500">
+              <div className="mt-2 w-1 h-1 bg-violet-500 rounded-full flex-shrink-0" />
+              <p className="text-xs md:text-sm font-light leading-relaxed text-zinc-400">
+                {parts.map((part, index) =>
+                  part.startsWith('**') && part.endsWith('**')
+                    ? <strong key={index} className="font-bold text-zinc-200">{part.slice(2, -2)}</strong>
+                    : part
+                )}
+              </p>
+            </div>
+          );
+        }
+
+        const parts = trimmed.split(/(\*\*.*?\*\*)/g);
+        return (
+          <p key={i} className="text-xs md:text-sm font-light leading-relaxed text-zinc-400 opacity-90">
+            {parts.map((part, index) =>
+              part.startsWith('**') && part.endsWith('**')
+                ? <strong key={index} className="font-bold text-zinc-200">{part.slice(2, -2)}</strong>
+                : part
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+};
+
+const FlashDossier: React.FC<{ text: string; language: string }> = ({ text, language }) => {
+  const sections = text.split(/\*\*([^*]+)\*\*/g);
+  const formattedSections: { title: string; content: string }[] = [];
+
+  for (let i = 1; i < sections.length; i += 2) {
+    formattedSections.push({
+      title: sections[i].trim(),
+      content: sections[i + 1] ? sections[i + 1].trim() : ''
+    });
+  }
+
+  if (formattedSections.length === 0) {
+    return <RichText text={text} language={language} />;
+  }
+
+  const intro = sections[0].trim();
+
+  return (
+    <div className="space-y-6">
+      {intro && intro.length > 10 && (
+        <p className="text-[10px] text-zinc-600 font-mono uppercase tracking-widest pl-2 italic">{intro}</p>
+      )}
+      <div className="grid grid-cols-1 gap-4">
+        {formattedSections.map((section, idx) => (
+          <div key={idx} className="relative bg-zinc-900/10 border border-zinc-900/50 rounded-3xl overflow-hidden group hover:bg-zinc-900/30 hover:border-violet-600/30 transition-all duration-500">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <span className="text-6xl font-black font-mono leading-none select-none tracking-tighter">0{idx + 1}</span>
+            </div>
+            <div className="p-6 md:p-8 space-y-5">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-4 bg-violet-600 rounded-full shadow-[0_0_10px_rgba(124,58,237,0.4)]" />
+                <h5 className="text-sm font-bold text-white group-hover:text-violet-400 transition-colors uppercase tracking-widest">
+                  {section.title.replace(/:$/, '')}
+                </h5>
+              </div>
+              <DossierText text={section.content} language={language} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const Toast: React.FC<{ message: string; visible: boolean; onHide: () => void }> = ({ message, visible, onHide }) => {
   useEffect(() => {
     if (visible) {
@@ -1955,12 +2040,10 @@ const App: React.FC = () => {
                     </div>
 
                     {currentDaily ? (
-                      <div className="space-y-6">
-                        <div className="p-4 bg-zinc-900/40 border border-zinc-800/50 rounded-2xl">
-                          <h4 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Flash Summary</h4>
-                          <p className="text-sm text-zinc-300 leading-relaxed font-light">
-                            {currentDaily.flashSummary || "Analyzing feed for summary..."}
-                          </p>
+                      <div className="space-y-8">
+                        <div className="space-y-4">
+                          <h4 className="text-[10px] font-mono text-violet-500 uppercase tracking-widest pl-2">Flash Summary // Active Intelligence</h4>
+                          <FlashDossier text={currentDaily.flashSummary || "Analyzing feed for summary..."} language={language} />
                         </div>
 
                         <div className="space-y-3">
