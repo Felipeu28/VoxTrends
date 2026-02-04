@@ -532,29 +532,62 @@ const InterrogationHub: React.FC<{
           {/* Input Terminal */}
           <div className="relative group">
             <div className="absolute inset-0 bg-violet-600/5 rounded-[2.5rem] blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
-            <div className="relative bg-zinc-950/80 border border-zinc-800/80 group-focus-within:border-violet-600/50 rounded-[2.5rem] p-2 pr-2 backdrop-blur-md transition-all">
-              <input
-                type="text"
-                placeholder={listening ? (language === 'Spanish' ? 'Interceptando Audio...' : 'Intercepting Audio...') : 'Enter manual interrogation command...'}
-                className="w-full bg-transparent py-6 px-8 text-lg md:text-xl font-light text-white focus:outline-none placeholder:text-zinc-700"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
-              />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
-                <button
-                  onClick={listening ? stopListening : startListening}
-                  disabled={thinking}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${listening ? 'bg-red-600 animate-pulse text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
-                >
-                  <ICONS.Podcast className="w-5 h-5" />
-                </button>
+            <div className="relative bg-zinc-950/80 border border-zinc-800/80 group-focus-within:border-violet-600/50 rounded-[2.5rem] p-4 pr-4 backdrop-blur-md transition-all flex flex-col gap-2">
+              <div className="flex items-start gap-4 px-4 overflow-hidden">
+                <span className="text-violet-600 font-mono text-2xl mt-1 select-none">&gt;</span>
+                <textarea
+                  rows={1}
+                  placeholder={listening ? (language === 'Spanish' ? 'Interceptando Audio...' : 'Intercepting Audio...') : 'Enter manual interrogation command...'}
+                  className="w-full bg-transparent py-2 text-lg md:text-xl font-mono text-white focus:outline-none placeholder:text-zinc-700 resize-none min-h-[44px] custom-scrollbar"
+                  value={question}
+                  onChange={(e) => {
+                    setQuestion(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleAsk();
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between px-2 pt-2 border-t border-zinc-900/50">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={listening ? stopListening : startListening}
+                    disabled={thinking}
+                    className={`h-10 px-4 rounded-full flex items-center gap-3 transition-all ${listening ? 'bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)]' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <ICONS.Podcast className="w-5 h-5 relative z-10" />
+                      {listening && (
+                        <div className="absolute inset-0 bg-white/20 rounded-full animate-ping" />
+                      )}
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">
+                      {listening ? 'Signal Active' : 'Voice Input'}
+                    </span>
+                  </button>
+                  {listening && (
+                    <div className="flex gap-1 items-end h-4 pb-1">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className="w-0.5 bg-red-400 rounded-full animate-bounce h-full"
+                          style={{ animationDelay: `${i * 0.15}s`, animationDuration: '0.6s' }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => handleAsk()}
                   disabled={thinking || !question.trim()}
-                  className="px-8 h-12 bg-violet-600 text-white rounded-2xl font-black text-sm tracking-widest hover:bg-violet-700 disabled:opacity-30 transition-all shadow-lg shadow-violet-600/20"
+                  className="px-8 h-10 bg-violet-600 text-white rounded-full font-black text-[10px] tracking-widest hover:bg-violet-700 disabled:opacity-30 transition-all shadow-lg shadow-violet-600/20"
                 >
-                  EXE
+                  EXE COMMAND
                 </button>
               </div>
             </div>
