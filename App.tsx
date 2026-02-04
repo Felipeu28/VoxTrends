@@ -1561,6 +1561,8 @@ const App: React.FC = () => {
       setVoiceError(err instanceof Error ? err.message : 'Failed to generate audio');
     } finally {
       setVoiceGenerating(false);
+      setLoading(false);
+      setStatus('');
     }
   };
 
