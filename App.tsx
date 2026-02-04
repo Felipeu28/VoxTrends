@@ -2041,12 +2041,13 @@ const App: React.FC = () => {
                 {currentDaily ? (
                   <>
                     <BroadcastStage
+                      key={`${activeTab}-${region}-${!!currentDaily.audio}`}
                       daily={currentDaily}
                       activeTab={activeTab}
                       region={region}
                       onSave={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
                       selectedVoiceId={selectedVoiceId}
-                      hasAudio={!!currentDaily.audio}
+                      hasAudio={!!currentDaily.audio || Boolean(currentDaily.audio)}
                       isPlaying={playingClipId === `edition-${activeTab}`}
                       onPlayPause={() => {
                         if (playingClipId === `edition-${activeTab}`) {
