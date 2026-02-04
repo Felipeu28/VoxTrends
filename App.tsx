@@ -104,26 +104,52 @@ const STORIES = {
 
 const RichText: React.FC<{ text: string; language: string }> = ({ text, language }) => {
   const lines = text.split('\n');
+
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-6 md:space-y-8">
       {lines.map((line, i) => {
-        if (!line.trim()) return null;
-        const isHeader = line.startsWith('#') || (line.toUpperCase() === line && line.length > 5 && !line.includes(':'));
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={i} className="h-4" />;
+
+        // Header Check (# or ALL CAPS or bold starts a line)
+        const isHeader = trimmed.startsWith('#') || (trimmed.toUpperCase() === trimmed && trimmed.length > 5 && !trimmed.includes(':'));
+
         if (isHeader) {
           return (
-            <h4 key={i} className="text-xl md:text-3xl font-serif font-bold text-white tracking-tight border-l-4 border-violet-600 pl-4 md:pl-6 my-6 md:my-10 animate-in slide-in-from-left">
-              {line.replace(/#/g, '').trim()}
+            <h4 key={i} className="text-xl md:text-3xl font-serif font-bold text-white tracking-tight border-l-4 border-violet-600 pl-4 md:pl-6 pt-2 pb-1 my-8 md:my-12 animate-in slide-in-from-left">
+              {trimmed.replace(/#/g, '').trim()}
             </h4>
           );
         }
 
-        // Handle bold text (**)
-        const parts = line.split(/(\*\*.*?\*\*)/g);
+        // List Item Check (* or - or •)
+        const isListItem = trimmed.startsWith('*') || trimmed.startsWith('-') || trimmed.startsWith('•');
+
+        if (isListItem) {
+          const content = trimmed.replace(/^[*•-]\s*/, '');
+          const parts = content.split(/(\*\*.*?\*\*)/g);
+
+          return (
+            <div key={i} className="flex gap-4 pl-4 md:pl-6 group py-1 animate-in fade-in slide-in-from-left-2 duration-500">
+              <div className="mt-2.5 w-1.5 h-1.5 bg-violet-600 rounded-full flex-shrink-0 group-hover:scale-125 transition-transform shadow-[0_0_8px_rgba(124,58,237,0.5)]" />
+              <p className="text-base md:text-xl font-light leading-relaxed text-zinc-300">
+                {parts.map((part, index) =>
+                  part.startsWith('**') && part.endsWith('**')
+                    ? <strong key={index} className="font-bold text-white drop-shadow-sm">{part.slice(2, -2)}</strong>
+                    : part
+                )}
+              </p>
+            </div>
+          );
+        }
+
+        // Paragraph handling with bold text (**)
+        const parts = trimmed.split(/(\*\*.*?\*\*)/g);
         return (
-          <p key={i} className="text-base md:text-xl font-light leading-relaxed text-zinc-300 opacity-90">
+          <p key={i} className="text-base md:text-xl font-light leading-relaxed text-zinc-300 opacity-90 pl-4 md:pl-6 border-l border-zinc-900/50">
             {parts.map((part, index) =>
               part.startsWith('**') && part.endsWith('**')
-                ? <strong key={index} className="font-bold text-white">{part.slice(2, -2)}</strong>
+                ? <strong key={index} className="font-bold text-white drop-shadow-sm">{part.slice(2, -2)}</strong>
                 : part
             )}
           </p>
@@ -348,13 +374,14 @@ const InterrogationHub: React.FC<{
   language: string;
   history: ChatMessage[];
   setHistory: (h: ChatMessage[]) => void;
-  suggestedQuestions?: string[];
-}> = ({ context, language, history, setHistory, suggestedQuestions = [] }) => {
+  investigationAngles?: { label: string; prompt: string }[];
+  targetTitle?: string;
+}> = ({ context, language, history, setHistory, investigationAngles = [], targetTitle }) => {
   const t = translations[language as keyof typeof translations] || translations.English;
   const [question, setQuestion] = useState('');
   const [thinking, setThinking] = useState(false);
   const [listening, setListening] = useState(false);
-  const [collapsed, setCollapsed] = useState(false); // Default to not collapsed in Intel view
+  const [collapsed, setCollapsed] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -393,7 +420,6 @@ const InterrogationHub: React.FC<{
     const q = explicitQuestion || question;
     if (!q.trim()) return;
 
-    // Auto-expand when user asks first question
     if (collapsed) setCollapsed(false);
 
     setThinking(true);
@@ -414,118 +440,144 @@ const InterrogationHub: React.FC<{
   };
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 md:w-12 md:h-12 bg-violet-600 rounded-xl flex items-center justify-center">
-            <ICONS.Search className="w-5 h-5 md:w-6 md:h-6 text-white" />
+    <div className="space-y-8">
+      {/* Research Target Header */}
+      <div className="relative p-6 rounded-[2rem] bg-zinc-900/30 border border-zinc-800/50 backdrop-blur-sm overflow-hidden group">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-violet-600/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2" />
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-violet-600/20 border border-violet-600/30 rounded-2xl flex items-center justify-center flex-shrink-0 animate-pulse">
+              <ICONS.Search className="w-6 h-6 text-violet-400" />
+            </div>
+            <div>
+              <p className="text-[10px] text-violet-500 font-mono tracking-widest uppercase mb-1">Target Intelligence Package</p>
+              <h4 className="text-xl md:text-2xl font-serif font-bold text-white tracking-tight leading-tight">
+                {targetTitle || "Awaiting Synchronisation"}
+              </h4>
+            </div>
           </div>
-          <div>
-            <h4 className="text-lg md:text-xl font-serif font-bold text-white tracking-widest uppercase">Intel Interrogation</h4>
-            <p className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Unit Alpha-7 // Secure Feed</p>
-          </div>
+          {history.length > 0 && (
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all"
+            >
+              <svg className={`w-5 h-5 transition-transform duration-300 ${collapsed ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
         </div>
-        {history.length > 0 && (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="p-2 bg-zinc-900 rounded-lg text-zinc-400 hover:text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={collapsed ? "M19 9l-7 7-7-7" : "M5 15l7-7 7 7"} />
-            </svg>
-          </button>
-        )}
       </div>
 
       {(!collapsed || history.length === 0) && (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {/* Chat History */}
           {history.length > 0 && (
-            <div className="space-y-6 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
+            <div className="space-y-8 max-h-[600px] overflow-y-auto pr-6 custom-scrollbar">
               {history.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-5 md:p-8 rounded-3xl ${m.role === 'user'
-                    ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20'
-                    : 'bg-zinc-900/50 border border-zinc-800 backdrop-blur-md'}`}>
-                    <RichText text={m.text} language={language} />
+                  <div className={`max-w-[85%] relative ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <p className={`text-[10px] font-mono uppercase tracking-widest mb-2 ${m.role === 'user' ? 'text-right text-violet-500' : 'text-zinc-600 pl-4'}`}>
+                      {m.role === 'user' ? 'Investigator' : 'Neural Core'}
+                    </p>
+                    <div className={`p-6 md:p-10 rounded-[2.5rem] shadow-2xl ${m.role === 'user'
+                      ? 'bg-gradient-to-br from-violet-600 to-violet-700 text-white'
+                      : 'bg-zinc-900/80 border border-zinc-800 backdrop-blur-xl'}`}>
+                      <RichText text={m.text} language={language} />
+                    </div>
                   </div>
                 </div>
               ))}
               {thinking && (
-                <div className="text-xs text-violet-500 font-mono animate-pulse flex items-center gap-2 pl-4">
-                  <div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" />
-                  Processing Intelligence...
+                <div className="flex items-center gap-4 pl-6">
+                  <div className="flex gap-1.5">
+                    <div className="w-2 h-2 bg-violet-600 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <div className="w-2 h-2 bg-violet-600 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <div className="w-2 h-2 bg-violet-600 rounded-full animate-bounce" />
+                  </div>
+                  <span className="text-[10px] text-violet-500 font-mono uppercase tracking-[0.2em] animate-pulse">Distilling Insights...</span>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
           )}
 
-          {/* Suggested Questions */}
-          {suggestedQuestions.length > 0 && (
-            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom duration-700">
-              {suggestedQuestions.map((q, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleAsk(q)}
-                  disabled={thinking}
-                  className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-bold text-zinc-400 hover:text-white hover:border-violet-600/50 hover:bg-violet-600/10 transition-all disabled:opacity-50"
-                >
-                  {q}
-                </button>
-              ))}
+          {/* Investigation Angles */}
+          {investigationAngles.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 px-2">
+                <div className="h-px flex-1 bg-gradient-to-r from-transparent to-zinc-800" />
+                <span className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Select Investigation Angle</span>
+                <div className="h-px flex-1 bg-gradient-to-l from-transparent to-zinc-800" />
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {investigationAngles.map((angle, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleAsk(angle.prompt)}
+                    disabled={thinking}
+                    className="group relative px-5 py-3 bg-zinc-950 border border-zinc-800 rounded-2xl transition-all hover:border-violet-600/50 hover:bg-violet-600/5 disabled:opacity-50"
+                  >
+                    <div className="absolute inset-0 bg-violet-600/10 rounded-2xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity" />
+                    <div className="relative">
+                      <p className="text-xs font-bold text-zinc-200 group-hover:text-violet-400 mb-0.5">{angle.label}</p>
+                      <p className="text-[9px] text-zinc-600 uppercase tracking-tighter group-hover:text-zinc-400 line-clamp-1 max-w-[150px]">Deep Dive Analysis</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Input Field */}
+          {/* Input Terminal */}
           <div className="relative group">
-            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-violet-600/50 to-transparent opacity-0 group-focus-within:opacity-100 transition-opacity" />
-            <input
-              type="text"
-              placeholder={listening ? (language === 'Spanish' ? 'Escuchando...' : 'Listening...') : 'Type interrogation command...'}
-              className={`w-full bg-zinc-900/40 border-y border-zinc-800/50 md:border md:rounded-3xl py-5 md:py-8 px-6 md:px-10 pr-28 md:pr-40 text-base md:text-xl font-light focus:outline-none transition-all ${listening ? 'border-violet-600 animate-pulse' : 'border-zinc-800 md:border-zinc-800/80 focus:border-violet-600 focus:bg-zinc-900/60 shadow-inner'}`}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
-            />
-            <div className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <button
-                onClick={listening ? stopListening : startListening}
-                disabled={thinking}
-                className={`w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center transition-all disabled:opacity-40 ${listening ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
-                title={listening ? 'Stop' : 'Ask with voice'}
-              >
-                <svg className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
-                  {listening ? (
-                    <rect x="6" y="6" width="12" height="12" rx="2" fill="white" />
-                  ) : (
-                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z" />
-                  )}
-                </svg>
-              </button>
-              <button
-                onClick={() => handleAsk()}
-                disabled={thinking || !question.trim()}
-                className="px-4 md:px-6 h-full bg-violet-600 text-white rounded-xl font-black text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-violet-700 transition-all"
-              >
-                ASK
-              </button>
+            <div className="absolute inset-0 bg-violet-600/5 rounded-[2.5rem] blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
+            <div className="relative bg-zinc-950/80 border border-zinc-800/80 group-focus-within:border-violet-600/50 rounded-[2.5rem] p-2 pr-2 backdrop-blur-md transition-all">
+              <input
+                type="text"
+                placeholder={listening ? (language === 'Spanish' ? 'Interceptando Audio...' : 'Intercepting Audio...') : 'Enter manual interrogation command...'}
+                className="w-full bg-transparent py-6 px-8 text-lg md:text-xl font-light text-white focus:outline-none placeholder:text-zinc-700"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+                <button
+                  onClick={listening ? stopListening : startListening}
+                  disabled={thinking}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${listening ? 'bg-red-600 animate-pulse text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800'}`}
+                >
+                  <ICONS.Podcast className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handleAsk()}
+                  disabled={thinking || !question.trim()}
+                  className="px-8 h-12 bg-violet-600 text-white rounded-2xl font-black text-sm tracking-widest hover:bg-violet-700 disabled:opacity-30 transition-all shadow-lg shadow-violet-600/20"
+                >
+                  EXE
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Collapsed State - Show Badge */}
       {collapsed && history.length > 0 && (
-        <div className="flex items-center justify-between p-4 bg-zinc-900 rounded-xl border border-zinc-800">
-          <span className="text-sm text-zinc-400">{history.length} message{history.length > 1 ? 's' : ''} in conversation</span>
-          <button
-            onClick={() => setCollapsed(false)}
-            className="text-sm font-bold text-violet-400 hover:text-violet-300"
-          >
-            Show Conversation →
-          </button>
-        </div>
+        <button
+          onClick={() => setCollapsed(false)}
+          className="w-full flex items-center justify-between p-6 bg-zinc-900/50 border border-zinc-800 rounded-[2rem] hover:bg-zinc-900 transition-all group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-violet-600/10 rounded-xl flex items-center justify-center">
+              <div className="w-2 h-2 bg-violet-500 rounded-full animate-ping" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-white group-hover:text-violet-400 transition-colors">Conversation Halted</p>
+              <p className="text-xs text-zinc-500">{history.length} intel fragments stored in cache.</p>
+            </div>
+          </div>
+          <span className="text-xs font-black text-violet-500 uppercase tracking-widest">Resume →</span>
+        </button>
       )}
     </div>
   );
@@ -1926,13 +1978,13 @@ const App: React.FC = () => {
                             return updated;
                           });
                         }}
-                        suggestedQuestions={[
-                          "Analyze the economic implications of this development.",
-                          "Who are the primary stakeholders mentioned?",
-                          "Predict the potential next moves based on the data.",
-                          "Summarize the conflicting perspectives in this report.",
-                          "How does this impact the local population?"
+                        investigationAngles={[
+                          { label: "Strategic Analysis", prompt: "Perform a strategic analysis of this intelligence. What are the long-term implications and potential future scenarios?" },
+                          { label: "Stakeholder Map", prompt: "Identify all primary and secondary stakeholders mentioned. What are their motives and relationships?" },
+                          { label: "Economic Pulse", prompt: "Analyze the economic and financial impact described in this report. How does it affect markets or value chains?" },
+                          { label: "Social Lens", prompt: "What is the social and cultural impact of this development? How does it affect the general population or public sentiment?" }
                         ]}
+                        targetTitle={`${activeTab} Intelligence // ${region}`}
                       />
                     ) : (
                       <div className="py-24 text-center">
