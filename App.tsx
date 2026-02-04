@@ -2073,7 +2073,7 @@ const App: React.FC = () => {
                       region={region}
                       onSave={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
                       selectedVoiceId={selectedVoiceId}
-                      hasAudio={!!currentDaily.audio || Boolean(currentDaily.audio)}
+                      hasAudio={!!currentDaily.audio}
                       isPlaying={playingClipId === `edition-${activeTab}`}
                       onPlayPause={() => {
                         if (playingClipId === `edition-${activeTab}`) {
@@ -2090,14 +2090,38 @@ const App: React.FC = () => {
                         <VoiceSelector
                           editionId={currentDaily.edition_id || ''}
                           isScriptReady={true}
-                          generating={voiceGenerating}
-                          error={voiceError}
-                          selectedVoiceId={selectedVoiceId}
-                          onVoiceChange={(id) => {
-                            setSelectedVoiceId(id);
-                            setVoiceError(null);
+                          onAudioGenerated={(voiceId, audioUrl) => {
+                            // Update the dailyEditions state with the generated audio
+                            setSelectedVoiceId(voiceId);
+                            setDailyEditions(prev => {
+                              const editionId = currentDaily.edition_id;
+                              let targetKey: string | null = null;
+
+                              // Find the edition key by edition_id
+                              for (const [key, daily] of Object.entries(prev)) {
+                                if (daily.edition_id === editionId) {
+                                  targetKey = key;
+                                  break;
+                                }
+                              }
+
+                              // Fallback to current key if not found
+                              if (!targetKey) {
+                                targetKey = currentEditionKey;
+                              }
+
+                              const updatedDaily = { ...prev[targetKey], audio: audioUrl };
+                              const updatedEditions = { ...prev, [targetKey]: updatedDaily };
+
+                              // Persist to local DB
+                              voxDB.set(VOX_EDITIONS_KEY, updatedEditions).catch(e =>
+                                console.error('Local DB Sync Error:', e)
+                              );
+
+                              return updatedEditions;
+                            });
+                            setToastMessage('Audio generated successfully!');
                           }}
-                          onGenerate={() => handleGenerateVoice(currentDaily.edition_id || '', selectedVoiceId)}
                         />
                       </section>
                     )}
