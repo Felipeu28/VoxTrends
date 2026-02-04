@@ -1545,11 +1545,17 @@ const App: React.FC = () => {
 
       // Update currentDaily with generated audio in the state
       const editionKey = getEditionKey(activeTab, region, language);
+      console.log('[DEBUG] Generating Voice for Key:', editionKey, 'Audio URL:', audioUrl);
+
       setDailyEditions(prev => {
         const currentDaily = prev[editionKey];
-        if (!currentDaily) return prev;
+        if (!currentDaily) {
+          console.error('[DEBUG] No currentDaily found for key:', editionKey);
+          return prev;
+        }
 
         const updatedDaily = { ...currentDaily, audio: audioUrl };
+        console.log('[DEBUG] Updating Daily:', updatedDaily);
         const updatedEditions = { ...prev, [editionKey]: updatedDaily };
         voxDB.set(VOX_EDITIONS_KEY, updatedEditions).catch(e => console.error('Local DB Sync Error:', e));
         return updatedEditions;
