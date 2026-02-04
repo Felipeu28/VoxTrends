@@ -69,6 +69,7 @@ const BroadcastTuner: React.FC<BroadcastTunerProps> = ({
                     <button
                         onClick={onRefresh}
                         disabled={loading}
+                        title="Refresh Edition (Uses 1 Credit)"
                         className={`
               p-2.5 rounded-xl border transition-all
               ${loading
