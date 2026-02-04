@@ -75,6 +75,31 @@ const VOX_EDITIONS_KEY = 'vox_daily_editions_v3'; // Incremented for new structu
 const getEditionKey = (type: EditionType, region: string, language: string) =>
   `${type}-${region}-${language}`;
 
+const STORIES = {
+  broadcast: [
+    "Synchronizing Satellite Uplink...",
+    "Scanning Global News Feeds...",
+    "Filtering Regional Signal Noise...",
+    "Parsing Intelligence Fragments...",
+    "Synthesizing Narrative Script...",
+    "Establishing Secure Transmission..."
+  ],
+  voice: [
+    "Initializing Vocal Synthesis...",
+    "Cloning Frequency Profiles...",
+    "Calibrating Inflection Matrices...",
+    "Generating Audio Stream...",
+    "Finalizing Voice Transmission..."
+  ],
+  research: [
+    "Accessing Neural Archives...",
+    "Indexing Verified Sources...",
+    "Cross-Referencing Grounding Data...",
+    "Distilling Expert Insights...",
+    "Assembling Intelligence Dossier..."
+  ]
+};
+
 // ==================== HELPER COMPONENTS ====================
 
 const RichText: React.FC<{ text: string; language: string }> = ({ text, language }) => {
@@ -210,13 +235,16 @@ const AudioPlayer: React.FC<{
 const ProgressBar: React.FC<{
   loading: boolean;
   status: string;
+  story?: string[];
   estimatedDuration?: number;
-}> = ({ loading, status, estimatedDuration = 25000 }) => {
-  const [progress, setProgress] = useState(0); //
+}> = ({ loading, status, story, estimatedDuration = 25000 }) => {
+  const [progress, setProgress] = useState(0);
+  const [storyIndex, setStoryIndex] = useState(0);
 
   useEffect(() => {
     if (!loading) {
       setProgress(0);
+      setStoryIndex(0);
       return;
     }
 
@@ -227,10 +255,23 @@ const ProgressBar: React.FC<{
       setProgress(newProgress);
     }, 100);
 
-    return () => clearInterval(interval);
-  }, [loading, estimatedDuration]);
+    // Story cycling logic
+    let storyInterval: any = null;
+    if (story && story.length > 0) {
+      storyInterval = setInterval(() => {
+        setStoryIndex(prev => (prev + 1) % story.length);
+      }, 4000); // Change story every 4 seconds
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (storyInterval) clearInterval(storyInterval);
+    };
+  }, [loading, estimatedDuration, story]);
 
   if (!loading) return null;
+
+  const currentStatus = story && story.length > 0 ? story[storyIndex] : status;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-[60] bg-zinc-950/95 backdrop-blur-xl border-b border-violet-600/30">
@@ -243,7 +284,10 @@ const ProgressBar: React.FC<{
       <div className="px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 border-3 border-violet-600 border-t-transparent rounded-full animate-spin" />
-          <p translate="no" className="text-sm font-mono text-violet-400">{status}</p>
+          <div className="flex flex-col">
+            <p translate="no" className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest leading-none mb-1">{status}</p>
+            <p translate="no" className="text-sm font-bold text-violet-400 animate-in fade-in slide-in-from-bottom-1 duration-500">{currentStatus}</p>
+          </div>
         </div>
         <p translate="no" className="text-xs text-zinc-600">{Math.round(progress)}%</p>
       </div>
@@ -304,12 +348,13 @@ const InterrogationHub: React.FC<{
   language: string;
   history: ChatMessage[];
   setHistory: (h: ChatMessage[]) => void;
-}> = ({ context, language, history, setHistory }) => {
+  suggestedQuestions?: string[];
+}> = ({ context, language, history, setHistory, suggestedQuestions = [] }) => {
   const t = translations[language as keyof typeof translations] || translations.English;
   const [question, setQuestion] = useState('');
   const [thinking, setThinking] = useState(false);
   const [listening, setListening] = useState(false);
-  const [collapsed, setCollapsed] = useState(true); // Start collapsed on mobile
+  const [collapsed, setCollapsed] = useState(false); // Default to not collapsed in Intel view
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -344,38 +389,40 @@ const InterrogationHub: React.FC<{
     }
   }, [history, collapsed]);
 
-  const handleAsk = async () => {
-    if (!question.trim()) return;
+  const handleAsk = async (explicitQuestion?: string) => {
+    const q = explicitQuestion || question;
+    if (!q.trim()) return;
 
     // Auto-expand when user asks first question
     if (collapsed) setCollapsed(false);
 
     setThinking(true);
-    const q = question;
-    setQuestion('');
-    setHistory([...history, { role: 'user', text: q }]);
+    if (!explicitQuestion) setQuestion('');
+
+    const newContextHistory: ChatMessage[] = [...history, { role: 'user' as const, text: q }];
+    setHistory(newContextHistory);
 
     try {
       const result = await backend.askQuestion(context, q, history, language);
-      setHistory([...history, { role: 'user', text: q }, { role: 'model', text: result }]);
+      setHistory([...newContextHistory, { role: 'model' as const, text: result }]);
     } catch (error) {
       console.error('Interrogation error:', error);
-      setHistory([...history, { role: 'user', text: q }, { role: 'model', text: 'Unable to process inquiry. Please try again.' }]);
+      setHistory([...newContextHistory, { role: 'model' as const, text: 'Unable to process inquiry. Please try again.' }]);
     } finally {
       setThinking(false);
     }
   };
 
   return (
-    <div className="mt-8 md:mt-12 border-t-2 border-violet-600/30 pt-8 md:pt-12 space-y-6 md:space-y-8 pb-10 bg-zinc-950/30 rounded-3xl px-4 md:px-8 -mx-4 md:-mx-8">
+    <div className="space-y-6 md:space-y-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 md:w-12 md:h-12 bg-violet-600 rounded-xl flex items-center justify-center">
-            <ICONS.Podcast className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            <ICONS.Search className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </div>
           <div>
-            <h4 className="text-lg md:text-xl font-serif font-bold text-white">Ask Questions</h4>
-            <p className="text-xs text-zinc-500">Get deeper insights about this news</p>
+            <h4 className="text-lg md:text-xl font-serif font-bold text-white tracking-widest uppercase">Intel Interrogation</h4>
+            <p className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Unit Alpha-7 // Secure Feed</p>
           </div>
         </div>
         {history.length > 0 && (
@@ -391,45 +438,64 @@ const InterrogationHub: React.FC<{
       </div>
 
       {(!collapsed || history.length === 0) && (
-        <>
+        <div className="space-y-8">
           {/* Chat History */}
           {history.length > 0 && (
-            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-6 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
               {history.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-4 md:p-6 rounded-2xl md:rounded-3xl ${m.role === 'user' ? 'bg-violet-600 text-white' : 'bg-zinc-900 border border-zinc-800'}`}>
+                  <div className={`max-w-[85%] p-5 md:p-8 rounded-3xl ${m.role === 'user'
+                    ? 'bg-violet-600 text-white shadow-xl shadow-violet-600/20'
+                    : 'bg-zinc-900/50 border border-zinc-800 backdrop-blur-md'}`}>
                     <RichText text={m.text} language={language} />
                   </div>
                 </div>
               ))}
               {thinking && (
-                <div className="text-xs text-violet-500 font-mono animate-pulse flex items-center gap-2">
+                <div className="text-xs text-violet-500 font-mono animate-pulse flex items-center gap-2 pl-4">
                   <div className="w-2 h-2 bg-violet-500 rounded-full animate-bounce" />
-                  Thinking...
+                  Processing Intelligence...
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
           )}
 
+          {/* Suggested Questions */}
+          {suggestedQuestions.length > 0 && (
+            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-bottom duration-700">
+              {suggestedQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleAsk(q)}
+                  disabled={thinking}
+                  className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-full text-xs font-bold text-zinc-400 hover:text-white hover:border-violet-600/50 hover:bg-violet-600/10 transition-all disabled:opacity-50"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Input Field */}
-          <div className="relative">
+          <div className="relative group">
+            <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-violet-600/50 to-transparent opacity-0 group-focus-within:opacity-100 transition-opacity" />
             <input
               type="text"
-              placeholder={listening ? (language === 'Spanish' ? 'Escuchando...' : 'Listening...') : 'Ask anything about this news...'}
-              className={`w-full bg-zinc-900 border rounded-2xl py-4 md:py-6 px-4 md:px-8 pr-28 md:pr-36 text-base md:text-lg focus:outline-none transition-colors ${listening ? 'border-violet-600 animate-pulse' : 'border-zinc-800 focus:border-violet-600'}`}
+              placeholder={listening ? (language === 'Spanish' ? 'Escuchando...' : 'Listening...') : 'Type interrogation command...'}
+              className={`w-full bg-zinc-900/40 border-y border-zinc-800/50 md:border md:rounded-3xl py-5 md:py-8 px-6 md:px-10 pr-28 md:pr-40 text-base md:text-xl font-light focus:outline-none transition-all ${listening ? 'border-violet-600 animate-pulse' : 'border-zinc-800 md:border-zinc-800/80 focus:border-violet-600 focus:bg-zinc-900/60 shadow-inner'}`}
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAsk()}
             />
-            <div className="absolute right-2 top-2 bottom-2 flex items-center gap-1.5">
+            <div className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2 flex items-center gap-2">
               <button
                 onClick={listening ? stopListening : startListening}
                 disabled={thinking}
-                className={`px-3 h-full rounded-xl flex items-center justify-center transition-all disabled:opacity-40 ${listening ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'}`}
+                className={`w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center transition-all disabled:opacity-40 ${listening ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
                 title={listening ? 'Stop' : 'Ask with voice'}
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" viewBox="0 0 24 24">
                   {listening ? (
                     <rect x="6" y="6" width="12" height="12" rx="2" fill="white" />
                   ) : (
@@ -438,7 +504,7 @@ const InterrogationHub: React.FC<{
                 </svg>
               </button>
               <button
-                onClick={handleAsk}
+                onClick={() => handleAsk()}
                 disabled={thinking || !question.trim()}
                 className="px-4 md:px-6 h-full bg-violet-600 text-white rounded-xl font-black text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-violet-700 transition-all"
               >
@@ -446,7 +512,7 @@ const InterrogationHub: React.FC<{
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* Collapsed State - Show Badge */}
@@ -457,7 +523,7 @@ const InterrogationHub: React.FC<{
             onClick={() => setCollapsed(false)}
             className="text-sm font-bold text-violet-400 hover:text-violet-300"
           >
-            Show Conversation â†’
+            Show Conversation →
           </button>
         </div>
       )}
@@ -872,6 +938,9 @@ const App: React.FC = () => {
   const [quotaRefreshTrigger, setQuotaRefreshTrigger] = useState(0);
   const [selectedVoiceId, setSelectedVoiceId] = useState('originals');
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
+  const [voiceGenerating, setVoiceGenerating] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [loadingStory, setLoadingStory] = useState<string[]>([]);
 
   const t = translations[language as keyof typeof translations] || translations.English;
 
@@ -993,6 +1062,7 @@ const App: React.FC = () => {
     }
 
     setLoading(true);
+    setLoadingStory(STORIES.broadcast);
     setStatus(forceRefresh ? 'Refreshing edition...' : 'Checking limits & cache...');
 
     try {
@@ -1072,6 +1142,7 @@ const App: React.FC = () => {
     if (!searchQuery.trim() || !authUser) return;
 
     setLoading(true);
+    setLoadingStory(STORIES.research);
     setStatus('Checking research limits...');
     setStep(1);
 
@@ -1100,6 +1171,40 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
       setStatus('');
+    }
+  };
+
+  const handleGenerateVoice = async (editionId: string, voiceId: string) => {
+    setVoiceGenerating(true);
+    setLoading(true); // Show global loader for voice too
+    setLoadingStory(STORIES.voice);
+    setVoiceError(null);
+    setStatus('Vocal Synthesis');
+
+    try {
+      const result = await backend.generateVoiceVariant(editionId, voiceId);
+
+      const audioUrl = result.data?.audio;
+      if (!audioUrl) throw new Error('No audio returned');
+
+      // Update currentDaily with generated audio in the state
+      const editionKey = getEditionKey(activeTab, region, language);
+      setDailyEditions(prev => {
+        const currentDaily = prev[editionKey];
+        if (!currentDaily) return prev;
+
+        const updatedDaily = { ...currentDaily, audio: audioUrl };
+        const updatedEditions = { ...prev, [editionKey]: updatedDaily };
+        voxDB.set(VOX_EDITIONS_KEY, updatedEditions).catch(e => console.error('Local DB Sync Error:', e));
+        return updatedEditions;
+      });
+
+      setToastMessage('🎉 Voice generated successfully!');
+    } catch (err) {
+      console.error('Voice generation error:', err);
+      setVoiceError(err instanceof Error ? err.message : 'Failed to generate audio');
+    } finally {
+      setVoiceGenerating(false);
     }
   };
 
@@ -1266,7 +1371,7 @@ const App: React.FC = () => {
   return (
     <div className="h-screen bg-[#050505] text-zinc-100 flex flex-col md:flex-row overflow-hidden font-sans">
       <Toast message={toastMessage || ''} visible={!!toastMessage} onHide={() => setToastMessage(null)} />
-      <ProgressBar loading={loading} status={status} />
+      <ProgressBar loading={loading} status={status} story={loadingStory} />
 
       {
         shareClip && (
@@ -1595,19 +1700,20 @@ const App: React.FC = () => {
                   )}
                 </section>
 
-                {/* Phase 3: Voice Selector - Full Width Below Header */}
                 {currentDaily && currentDaily.scriptReady && !currentDaily.audio && (
                   <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
                     <VoiceSelector
                       editionId={currentDaily.edition_id || ''}
                       isScriptReady={true}
-                      onAudioGenerated={(voiceId, audioUrl) => {
-                        // Update currentDaily with generated audio
-                        const updatedDaily = { ...currentDaily, audio: audioUrl };
-                        const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
-                        setDailyEditions(updatedEditions);
-                        voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
-                      }}
+                      generating={voiceGenerating}
+                      error={voiceError}
+                      selectedVoiceId={selectedVoiceId}
+                      onVoiceChange={(id) => {
+                        setSelectedVoiceId(id);
+                        setVoiceError(null);
+                      }
+                      }
+                      onGenerate={() => handleGenerateVoice(currentDaily.edition_id || '', selectedVoiceId)}
                     />
                   </section>
                 )}
@@ -1747,47 +1853,108 @@ const App: React.FC = () => {
 
           {/* Intel Center View - Dedicated Research Tab */}
           {view === 'intel' && (
-            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
-              <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-8 relative">
-                <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-violet-600/20">
-                    <ICONS.Search className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-3xl font-serif font-bold text-white">Intel Center</h3>
-                  <p className="text-zinc-500 mt-2">
-                    {currentDaily
-                      ? `Interrogating: ${activeTab} Edition · ${region}`
-                      : 'Select a broadcast to begin interrogation'}
-                  </p>
+            <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in pb-20">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                {/* Left Panel: Context & Intelligence Dashboard */}
+                <div className="lg:col-span-4 space-y-6">
+                  <section className="bg-zinc-950 border border-zinc-900 rounded-[2rem] p-6 sticky top-8">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-600/20">
+                        <ICONS.Podcast className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-serif font-bold text-white">Active Intelligence</h3>
+                        <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">{activeTab} · {region}</p>
+                      </div>
+                    </div>
+
+                    {currentDaily ? (
+                      <div className="space-y-6">
+                        <div className="p-4 bg-zinc-900/40 border border-zinc-800/50 rounded-2xl">
+                          <h4 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Flash Summary</h4>
+                          <p className="text-sm text-zinc-300 leading-relaxed font-light">
+                            {currentDaily.flashSummary || "Analyzing feed for summary..."}
+                          </p>
+                        </div>
+
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Verified Sources</h4>
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {currentDaily.links.map((link, i) => (
+                              <a
+                                key={i}
+                                href={link.uri}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block p-3 bg-zinc-900/30 border border-zinc-800/30 rounded-xl hover:border-violet-600/30 transition-all group"
+                              >
+                                <p className="text-[11px] font-bold text-zinc-200 group-hover:text-violet-400 truncate">{link.title}</p>
+                                <p className="text-[9px] text-zinc-600 truncate">{link.uri}</p>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center text-zinc-700">
+                        <ICONS.Search className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                        <p className="text-sm font-serif italic">No active feed. Sync a broadcast to begin interrogation.</p>
+                      </div>
+                    )}
+                  </section>
                 </div>
 
-                {currentDaily ? (
-                  <InterrogationHub
-                    context={currentDaily.text}
-                    language={language}
-                    history={currentDaily.chatHistory || []}
-                    setHistory={async (h) => {
-                      const updatedDaily = { ...currentDaily, chatHistory: h };
-                      const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
-                      setDailyEditions(updatedEditions);
-                      await voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
-                    }}
-                  />
-                ) : (
-                  <div className="py-20 text-center border-2 border-dashed border-zinc-900 rounded-3xl">
-                    <p className="text-zinc-600 font-serif italic">
-                      No active intelligence package loaded.<br />
-                      Go to <strong>Broadcast</strong> and sync an edition first.
-                    </p>
-                    <button
-                      onClick={() => setView('broadcast')}
-                      className="mt-6 px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-zinc-800 transition"
-                    >
-                      Go to Broadcast
-                    </button>
-                  </div>
-                )}
-              </section>
+                {/* Right Panel: Interrogation Terminal */}
+                <div className="lg:col-span-8">
+                  <section className="bg-zinc-950 border border-zinc-900 rounded-[3rem] p-6 md:p-10 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-violet-600/5 blur-[100px] -z-10" />
+
+                    {currentDaily ? (
+                      <InterrogationHub
+                        context={currentDaily.text}
+                        language={language}
+                        history={currentDaily.chatHistory || []}
+                        setHistory={(h) => {
+                          const editionKey = getEditionKey(activeTab, region, language);
+                          setDailyEditions(prev => {
+                            const updated = { ...prev };
+                            if (updated[editionKey]) {
+                              updated[editionKey] = { ...updated[editionKey], chatHistory: h };
+                              voxDB.set(VOX_EDITIONS_KEY, updated).catch(e => console.error('History Sync Fail:', e));
+                            }
+                            return updated;
+                          });
+                        }}
+                        suggestedQuestions={[
+                          "Analyze the economic implications of this development.",
+                          "Who are the primary stakeholders mentioned?",
+                          "Predict the potential next moves based on the data.",
+                          "Summarize the conflicting perspectives in this report.",
+                          "How does this impact the local population?"
+                        ]}
+                      />
+                    ) : (
+                      <div className="py-24 text-center">
+                        <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                          <ICONS.Search className="w-8 h-8 text-zinc-700" />
+                        </div>
+                        <h3 className="text-2xl font-serif font-bold text-white mb-2">Terminal Offline</h3>
+                        <p className="text-zinc-500 max-w-sm mx-auto">
+                          Synchronize your regional broadcast to activate the interrogation terminal.
+                        </p>
+                        <button
+                          onClick={() => setView('broadcast')}
+                          className="mt-6 px-6 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-zinc-800 transition border border-zinc-800"
+                        >
+                          Go to Broadcast
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                </div>
+
+              </div>
             </div>
           )}
 
