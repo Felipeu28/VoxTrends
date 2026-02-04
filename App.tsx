@@ -943,6 +943,9 @@ const App: React.FC = () => {
             language: profile.language,
           });
           setView('broadcast');
+        } else {
+          // Fallback if profile not ready yet
+          setView('broadcast');
         }
       } else {
         setUserProfile(null);
