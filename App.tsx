@@ -268,6 +268,138 @@ const FlashDossier: React.FC<{
   );
 };
 
+// ==================== CINEMATIC BROADCAST COMPONENTS ====================
+
+const BroadcastStage: React.FC<{
+  daily: DailyData;
+  activeTab: string;
+  region: string;
+  onSave: () => void;
+  selectedVoiceId: string;
+}> = ({ daily, activeTab, region, onSave, selectedVoiceId }) => {
+  return (
+    <div className="relative w-full aspect-[4/5] md:aspect-[21/9] rounded-[2.5rem] overflow-hidden shadow-2xl group isolate">
+      {/* Hero Image with Parallax-like scale */}
+      <img
+        src={daily.imageUrl || 'https://images.unsplash.com/photo-1478737270239-2fccd2c7862a?auto=format&fit=crop&q=80&w=1200'}
+        className="absolute inset-0 w-full h-full object-cover transition-transform duration-[20s] ease-linear scale-100 group-hover:scale-110"
+        alt="Broadcast Cover"
+      />
+
+      {/* Cinematic Gradient Overlays */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent opacity-60" />
+
+      {/* Content Container */}
+      <div className="absolute inset-0 p-8 md:p-16 flex flex-col justify-end items-start z-10">
+
+        {/* Top Badge */}
+        <div className="absolute top-8 left-8 md:top-12 md:left-12 flex items-center gap-3">
+          <div className="px-4 py-2 bg-black/50 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-white">Live Intelligence</span>
+          </div>
+        </div>
+
+        {/* Edition Info */}
+        <div className="space-y-4 max-w-2xl animate-in slide-in-from-bottom-10 duration-1000 fill-mode-both">
+          <div className="flex items-center gap-3 text-violet-400">
+            <ICONS.Podcast className="w-5 h-5" />
+            <span className="text-xs font-mono uppercase tracking-[0.2em]">{activeTab} // {region}</span>
+          </div>
+
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-bold text-white leading-[0.9] tracking-tight text-shadow-lg">
+            The Daily<br />Briefing
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-6 pt-4">
+            {/* Host Badge */}
+            <div className="flex items-center gap-3 pr-6 border-r border-white/20">
+              <div className="flex -space-x-3">
+                <div className="w-10 h-10 rounded-full bg-zinc-800 border-2 border-black flex items-center justify-center text-xs">🎙️</div>
+                <div className="w-10 h-10 rounded-full bg-zinc-700 border-2 border-black flex items-center justify-center text-xs">🎧</div>
+              </div>
+              <div>
+                <p className="text-[10px] text-zinc-400 uppercase tracking-wider">Hosts</p>
+                <p className="text-xs font-bold text-white">
+                  {selectedVoiceId === 'deep-divers' ? 'Marcus & Elena' :
+                    selectedVoiceId === 'trendspotters' ? 'Kai & Sophia' :
+                      'Alex & Jordan'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={onSave}
+              className="group flex items-center gap-3 pl-2"
+            >
+              <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center group-hover:bg-violet-600 group-hover:border-violet-600 transition-all">
+                <span className="text-base">💾</span>
+              </div>
+              <span className="text-xs font-bold text-white border-b border-transparent group-hover:border-violet-500 transition-all">Save to Vault</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BroadcastRichText: React.FC<{ text: string; language: string }> = ({ text, language }) => {
+  // Split by double newline to create "segments" instead of just lines
+  const segments = text.split(/\n\n+/);
+
+  return (
+    <div className="space-y-12 max-w-3xl mx-auto px-2 md:px-0">
+      {segments.map((segment, i) => {
+        const trimmed = segment.trim();
+        if (!trimmed) return null;
+
+        // Check if segment is a Header
+        const lines = trimmed.split('\n');
+        const firstLine = lines[0].trim();
+        const isHeader = firstLine.startsWith('#') || (firstLine === firstLine.toUpperCase() && firstLine.length > 5 && !firstLine.includes(':'));
+
+        if (isHeader) {
+          return (
+            <div key={i} className="relative py-8">
+              <span className="absolute -left-4 md:-left-12 top-10 text-[10px] font-mono text-zinc-700 -rotate-90 hidden md:block">SEGMENT 0{i + 1}</span>
+              <h3 className="text-2xl md:text-4xl font-serif font-bold text-white mb-6 leading-tight border-l-2 border-violet-500 pl-6">
+                {firstLine.replace(/#/g, '').trim()}
+              </h3>
+              {lines.slice(1).length > 0 && (
+                <p className="text-lg md:text-xl text-zinc-300 font-serif leading-relaxed pl-6">
+                  {lines.slice(1).join(' ')}
+                </p>
+              )}
+            </div>
+          );
+        }
+
+        // Standard Paragraph or List segment
+        return (
+          <div key={i} className="group relative pl-6 border-l border-zinc-900 hover:border-violet-900/50 transition-colors duration-500">
+            <div className="absolute left-[-2px] top-0 h-full w-[2px] bg-gradient-to-b from-transparent via-violet-600 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="text-lg md:text-xl text-zinc-300/90 font-serif leading-loose">
+              {trimmed.split('\n').map((line, lIdx) => {
+                const isList = line.trim().startsWith('-') || line.trim().startsWith('•');
+                if (isList) {
+                  return (
+                    <div key={lIdx} className="flex gap-3 py-1 pl-2">
+                      <span className="text-violet-500 mt-2">•</span>
+                      <span>{line.replace(/^[-•]\s*/, '')}</span>
+                    </div>
+                  );
+                }
+                return <p key={lIdx} className="mb-4 last:mb-0">{line}</p>;
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 const Toast: React.FC<{ message: string; visible: boolean; onHide: () => void }> = ({ message, visible, onHide }) => {
   useEffect(() => {
     if (visible) {
@@ -1885,89 +2017,118 @@ const App: React.FC = () => {
 
               {/* Main Broadcast Section */}
               <div className="lg:col-span-8 lg:col-start-3 space-y-8">
-                <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
-                  {/* Header: Title and Edition Info */}
-                  <div className="animate-in slide-in-from-top duration-700">
-                    <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      {editionVariants > 1 && (
-                        <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold text-zinc-500">
-                          {editionVariants} version{editionVariants > 1 ? 's' : ''}
-                        </span>
+                {currentDaily ? (
+                  <>
+                    <BroadcastStage
+                      daily={currentDaily}
+                      activeTab={activeTab}
+                      region={region}
+                      onSave={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
+                      selectedVoiceId={selectedVoiceId}
+                    />
+
+                    {/* Voice Selector */}
+                    {currentDaily.scriptReady && !currentDaily.audio && (
+                      <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
+                        <VoiceSelector
+                          editionId={currentDaily.edition_id || ''}
+                          isScriptReady={true}
+                          generating={voiceGenerating}
+                          error={voiceError}
+                          selectedVoiceId={selectedVoiceId}
+                          onVoiceChange={(id) => {
+                            setSelectedVoiceId(id);
+                            setVoiceError(null);
+                          }}
+                          onGenerate={() => handleGenerateVoice(currentDaily.edition_id || '', selectedVoiceId)}
+                        />
+                      </section>
+                    )}
+
+                    {/* Audio Player */}
+                    {currentDaily.audio && (
+                      <>
+                        <section className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 relative overflow-hidden flex justify-center">
+                          <AudioPlayer
+                            audioData={currentDaily.audio}
+                            clipId={`edition-${activeTab}`}
+                            isPlaying={playingClipId === `edition-${activeTab}`}
+                            onPlayPause={() => {
+                              if (playingClipId === `edition-${activeTab}`) {
+                                setPlayingClipId(null);
+                              } else {
+                                setPlayingClipId(`edition-${activeTab}`);
+                              }
+                            }}
+                            onEnded={() => setPlayingClipId(null)}
+                          />
+                        </section>
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() => {
+                              const updatedDaily = { ...currentDaily, audio: null };
+                              const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
+                              setDailyEditions(updatedEditions);
+                              voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
+                            }}
+                            className="text-xs text-zinc-600 hover:text-violet-400 transition-colors"
+                          >
+                            Try a different voice →
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Immersive Text Content */}
+                    <div className="space-y-10 animate-in fade-in duration-1000">
+                      <BroadcastRichText text={currentDaily.text} language={language} />
+
+                      {/* Grounding Links */}
+                      {currentDaily.links && currentDaily.links.length > 0 && (
+                        <details open className="group border-t border-zinc-800 pt-6 md:pt-8 bg-zinc-900/5 px-6 pb-6 rounded-2xl">
+                          <summary className="flex items-center justify-between cursor-pointer list-none py-2">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-emerald-600/20 border border-emerald-600/30 rounded-lg flex items-center justify-center">
+                                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <h5 className="text-sm font-bold text-white">Verified Sources</h5>
+                                <p className="text-xs text-zinc-500">{currentDaily.links.length} source{currentDaily.links.length > 1 ? 's' : ''}</p>
+                              </div>
+                            </div>
+                            <svg className="w-5 h-5 text-zinc-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </summary>
+                          <div className="mt-4 space-y-3 pl-11">
+                            {currentDaily.links.map((link, i) => (
+                              <a
+                                key={i}
+                                href={link.uri}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block p-4 bg-zinc-950 border border-zinc-800 rounded-xl hover:border-violet-600/50 hover:bg-zinc-900/50 transition-all group"
+                              >
+                                <p className="text-xs font-bold text-white group-hover:text-violet-400 truncate">
+                                  {link.title}
+                                </p>
+                                <p className="text-[10px] text-zinc-600 truncate">{link.uri}</p>
+                              </a>
+                            ))}
+                          </div>
+                        </details>
                       )}
                     </div>
-                    <span className="text-violet-500 text-xs md:text-[10px] font-bold md:font-black uppercase tracking-wide md:tracking-widest mb-2 block">
-                      {activeTab} Edition
-                    </span>
-                    <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold tracking-tight">Today's Briefing</h3>
-                  </div>
-
-                  {currentDaily && (
-                    <div className="mt-8">
-                      <button
-                        onClick={() => saveToVault(`${activeTab} ${region} Broadcast`, currentDaily, 'Daily')}
-                        className="px-6 py-3 bg-emerald-600 border border-emerald-700 rounded-xl text-sm font-black tracking-wide text-white hover:bg-emerald-700 transition-all shadow-lg"
-                      >
-                        💾 SAVE
-                      </button>
-                    </div>
-                  )}
-                </section>
-
-                {currentDaily && currentDaily.scriptReady && !currentDaily.audio && (
-                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden">
-                    <VoiceSelector
-                      editionId={currentDaily.edition_id || ''}
-                      isScriptReady={true}
-                      generating={voiceGenerating}
-                      error={voiceError}
-                      selectedVoiceId={selectedVoiceId}
-                      onVoiceChange={(id) => {
-                        setSelectedVoiceId(id);
-                        setVoiceError(null);
-                      }
-                      }
-                      onGenerate={() => handleGenerateVoice(currentDaily.edition_id || '', selectedVoiceId)}
-                    />
-                  </section>
-                )}
-
-                {/* Audio Player - Show if audio exists */}
-                {currentDaily && currentDaily.audio && (
-                  <>
-                    <section className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-4 relative overflow-hidden flex justify-center">
-                      <AudioPlayer
-                        audioData={currentDaily.audio}
-                        clipId={`edition-${activeTab}`}
-                        isPlaying={playingClipId === `edition-${activeTab}`}
-                        onPlayPause={() => {
-                          if (playingClipId === `edition-${activeTab}`) {
-                            setPlayingClipId(null);
-                          } else {
-                            setPlayingClipId(`edition-${activeTab}`);
-                          }
-                        }}
-                        onEnded={() => setPlayingClipId(null)}
-                      />
-                    </section>
-                    <div className="flex justify-center">
-                      <button
-                        onClick={() => {
-                          const updatedDaily = { ...currentDaily, audio: null };
-                          const updatedEditions = { ...dailyEditions, [currentEditionKey]: updatedDaily };
-                          setDailyEditions(updatedEditions);
-                          voxDB.set(VOX_EDITIONS_KEY, updatedEditions);
-                        }}
-                        className="text-xs text-zinc-600 hover:text-violet-400 transition-colors"
-                      >
-                        Try a different voice →
-                      </button>
-                    </div>
                   </>
-                )}
+                ) : (
+                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden flex flex-col items-center justify-center gap-6 py-24">
+                    <div className="text-center mb-6">
+                      <h3 className="text-3xl font-serif font-bold tracking-tight text-zinc-700">Today's Briefing</h3>
+                      <p className="text-zinc-600 text-xs font-mono uppercase tracking-widest mt-2">{activeTab} Edition // Offline</p>
+                    </div>
 
-                {/* No Current Daily - Show Generate Button */}
-                {!currentDaily && (
-                  <section className="bg-zinc-900/10 border border-zinc-900 rounded-[3rem] p-8 md:p-12 relative overflow-hidden flex flex-col items-center justify-center gap-6 py-20">
                     {Object.keys(dailyEditions).some(k => k.startsWith(activeTab)) && (
                       <p className="text-sm text-zinc-500 text-center max-w-xs">
                         💡 Changed settings? Generate a new version for {region} in {language}
@@ -1980,84 +2141,14 @@ const App: React.FC = () => {
                     >
                       {loading ? 'SYNCING...' : `${t.sync} ${activeTab.toUpperCase()}`}
                     </button>
-                  </section>
-                )}
 
-                {/* Content: Image, Text, Links, Chat */}
-                {currentDaily && (
-                  <div className="space-y-10 animate-in fade-in duration-1000">
-                    <div className="w-full aspect-video rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl relative group">
-                      {currentDaily.imageUrl && (
-                        <img
-                          src={currentDaily.imageUrl}
-                          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                          alt={`${activeTab} Edition`}
-                          onError={(e) => {
-                            console.error('Frontend Image Load Error');
-                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1478737270239-2fccd2c7862a?auto=format&fit=crop&q=80&w=1200';
-                          }}
-                        />
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8">
-                        <p className="text-xs font-mono text-violet-400 tracking-widest uppercase">
-                          VOX HOSTS: {
-                            selectedVoiceId === 'deep-divers' ? 'MARCUS & ELENA' :
-                              selectedVoiceId === 'trendspotters' ? 'KAI & SOPHIA' :
-                                'ALEX & JORDAN'
-                          }
-                        </p>
+                    {!loading && (
+                      <div className="mt-8 opacity-20 flex flex-col items-center">
+                        <ICONS.Podcast className="w-16 h-16 text-zinc-500 mb-2" />
+                        <p className="text-xs font-serif italic text-zinc-500">VoxTrends Broadcast System</p>
                       </div>
-                    </div>
-
-                    <RichText text={currentDaily.text} language={language} />
-
-                    {/* Grounding Links */}
-                    {currentDaily.links && currentDaily.links.length > 0 && (
-                      <details open className="group border-t border-zinc-800 pt-6 md:pt-8">
-                        <summary className="flex items-center justify-between cursor-pointer list-none">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </div>
-                            <div>
-                              <h5 className="text-sm font-bold text-white">Verified Sources</h5>
-                              <p className="text-xs text-zinc-500">{currentDaily.links.length} source{currentDaily.links.length > 1 ? 's' : ''}</p>
-                            </div>
-                          </div>
-                          <svg className="w-5 h-5 text-zinc-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </summary>
-                        <div className="mt-4 space-y-3">
-                          {currentDaily.links.map((link, i) => (
-                            <a
-                              key={i}
-                              href={link.uri}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl hover:border-violet-600/50 transition-all group"
-                            >
-                              <p className="text-xs font-bold text-white group-hover:text-violet-400 truncate">
-                                {link.title}
-                              </p>
-                              <p className="text-[10px] text-zinc-600 truncate">{link.uri}</p>
-                            </a>
-                          ))}
-                        </div>
-                      </details>
                     )}
-
-                    {/* InterrogationHub moved to right research panel */}
-                  </div>
-                )}
-
-                {!currentDaily && !loading && (
-                  <div className="py-24 flex flex-col items-center justify-center text-zinc-800 opacity-20">
-                    <ICONS.Podcast className="w-20 h-20 mb-4" />
-                    <p className="font-serif italic text-lg">Broadcast offline. Sync to begin.</p>
-                  </div>
+                  </section>
                 )}
               </div>
 
